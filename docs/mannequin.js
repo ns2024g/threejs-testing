@@ -13,10 +13,72 @@
 //
 // The model faces +Z and its feet are at y = 0.
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
-const skinMat = new THREE.MeshStandardMaterial({ color: 0xcdb497, roughness: 0.55 });
-const pantsMat = new THREE.MeshStandardMaterial({ color: 0x2a2e36, roughness: 0.85 });
-const shoeMat = new THREE.MeshStandardMaterial({ color: 0x1c1a18, roughness: 0.7 });
+// ---------- Look: stylised realism ----------
+// Real proportions and materials, with simplified, friendly shapes and a slightly larger head.
+// Each player's look (skin, hair, clothes) is picked from their shirt colour, so every
+// player sees the same character for each person.
+const SKIN_TONES = ['#f3cfb1', '#e7b48f', '#d09a73', '#b07850', '#8a5636', '#5e3a24'];
+const HAIR_COLORS = ['#1c1410', '#3a2416', '#5e3b1f', '#8f5e30', '#c99a5b', '#2b2b2e', '#7a3018'];
+const PANTS_COLORS = ['#2a2f3a', '#34435e', '#4a4038', '#202226', '#4f5844', '#5b5f66'];
+const SHOE_COLORS = ['#e9e9e9', '#2a2a2a', '#a8372c', '#2f5a86', '#c9a25a'];
+const HAIR_STYLES = ['short', 'swept', 'long', 'buzz'];
+
+function lookFor(seedText) {
+  let h = 2166136261;
+  for (const ch of String(seedText)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  const pick = (list, salt) => list[(Math.abs(Math.imul(h ^ salt, 2654435761)) >>> 0) % list.length];
+  return {
+    skin: pick(SKIN_TONES, 11), hair: pick(HAIR_COLORS, 23), hairStyle: pick(HAIR_STYLES, 37),
+    pants: pick(PANTS_COLORS, 41), shoes: pick(SHOE_COLORS, 53),
+  };
+}
+
+// Shared shapes (built once, reused by every character)
+const GEO = (() => {
+  // Torso: broad shoulders tapering to a narrower waist (lathe profile, then flattened front-to-back)
+  const profile = [
+    [0.0, -0.06], [0.135, -0.06], [0.142, 0.04], [0.15, 0.16], [0.172, 0.27],
+    [0.192, 0.36], [0.195, 0.42], [0.17, 0.48], [0.11, 0.525], [0.0, 0.54],
+  ].map(([r, y]) => new THREE.Vector2(r, y));
+  const torso = new THREE.LatheGeometry(profile, 28);
+  torso.scale(1, 1, 0.66);
+
+  const skull = new THREE.SphereGeometry(0.128, 28, 20);
+  const hairCap = new THREE.SphereGeometry(0.136, 28, 16, 0, Math.PI * 2, 0, Math.PI * 0.52);
+  const buzzCap = new THREE.SphereGeometry(0.131, 28, 16, 0, Math.PI * 2, 0, Math.PI * 0.47);
+  // (sphere "phi" 1.5π is the back of the head)
+  const longBack = new THREE.SphereGeometry(0.136, 24, 16, Math.PI * 1.1, Math.PI * 0.8, 0, Math.PI * 0.78);
+  const fringe = new THREE.CapsuleGeometry(0.035, 0.12, 4, 10).rotateZ(Math.PI / 2);
+
+  const mouth = new THREE.TorusGeometry(0.022, 0.0042, 6, 14, Math.PI).rotateZ(Math.PI);
+
+  // Sneaker: rounded upper + flat sole (same footprint the walk's toe/heel maths expects)
+  const shoeUpper = new RoundedBoxGeometry(0.104, 0.062, 0.245, 3, 0.026);
+  const shoeSole = new RoundedBoxGeometry(0.11, 0.022, 0.25, 2, 0.008);
+
+  return {
+    torso, skull, hairCap, buzzCap, longBack, fringe, mouth, shoeUpper, shoeSole,
+    sphere: new THREE.SphereGeometry(1, 18, 12),
+    neck: new THREE.CylinderGeometry(0.052, 0.06, 0.11, 14),
+    belt: new THREE.CylinderGeometry(0.148, 0.148, 0.04, 24).scale(1, 1, 0.68),
+    pelvis: new THREE.CapsuleGeometry(0.13, 0.14, 4, 12).rotateZ(Math.PI / 2).scale(1, 1, 0.74),
+    thigh: new THREE.CapsuleGeometry(0.078, 0.3, 4, 12),
+    shin: new THREE.CapsuleGeometry(0.062, 0.32, 4, 12),
+    upperArm: new THREE.CapsuleGeometry(0.056, 0.2, 4, 12),
+    sleeve: new THREE.CylinderGeometry(0.066, 0.07, 0.12, 14),
+    forearm: new THREE.CapsuleGeometry(0.044, 0.2, 4, 12),
+    thumb: new THREE.CapsuleGeometry(0.014, 0.035, 3, 8),
+    brow: new THREE.CapsuleGeometry(0.0075, 0.032, 3, 8).rotateZ(Math.PI / 2),
+  };
+})();
+
+const eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.25 });
+const pupilMat = new THREE.MeshStandardMaterial({ color: 0x1a120d, roughness: 0.15 });
+const mouthMat = new THREE.MeshStandardMaterial({ color: 0x5a2a24, roughness: 0.6 });
+const soleMat = new THREE.MeshStandardMaterial({ color: 0xf2f0ea, roughness: 0.75 });
+const beltMat = new THREE.MeshStandardMaterial({ color: 0x1d1a17, roughness: 0.5 });
 
 // Body measurements (metres)
 const THIGH = 0.44;
@@ -56,8 +118,6 @@ function spline(t, keys, startSlope, endSlope) {
   return hermite(u, at(i), slope(i), at(i + 1), slope(i + 1));
 }
 
-const capsule = (r, len) => new THREE.CapsuleGeometry(r, len, 4, 10);
-
 function part(geo, mat, x, y, z, parent) {
   const m = new THREE.Mesh(geo, mat);
   m.position.set(x, y, z);
@@ -80,39 +140,88 @@ function joint(x, y, z, parent, order = 'XYZ') {
  * @param groundAt   (x, z) => ground height in world space, so feet plant on slopes
  */
 export function createMannequin(shirtColor, groundAt = () => 0) {
-  const shirtMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(shirtColor), roughness: 0.85 });
+  const look = lookFor(shirtColor);
+  const mats = {
+    shirt: new THREE.MeshStandardMaterial({ color: new THREE.Color(shirtColor), roughness: 0.82 }),
+    skin: new THREE.MeshStandardMaterial({ color: new THREE.Color(look.skin), roughness: 0.5 }),
+    hair: new THREE.MeshStandardMaterial({ color: new THREE.Color(look.hair), roughness: 0.55 }),
+    pants: new THREE.MeshStandardMaterial({ color: new THREE.Color(look.pants), roughness: 0.88 }),
+    shoes: new THREE.MeshStandardMaterial({ color: new THREE.Color(look.shoes), roughness: 0.6 }),
+  };
+  mats.nose = mats.skin;
+  const sphere = (r, mat, x, y, z, parent, sx = 1, sy = 1, sz = 1) => {
+    const m = part(GEO.sphere, mat, x, y, z, parent);
+    m.scale.set(r * sx, r * sy, r * sz);
+    return m;
+  };
 
-  // ---------- Skeleton + meshes ----------
+  // ---------- Skeleton + body ----------
   const root = new THREE.Group();                              // at the feet, rotate to face
   const pelvis = joint(0, STAND_HEIGHT, 0, root, 'YXZ');       // moves with the gait
-  const pelvisMesh = part(capsule(0.13, 0.14), pantsMat, 0, 0.03, 0, pelvis);
-  pelvisMesh.rotation.z = Math.PI / 2;
-  pelvisMesh.scale.set(1, 1, 0.8);
+  part(GEO.pelvis, mats.pants, 0, 0.02, 0, pelvis);
+  part(GEO.belt, beltMat, 0, 0.085, 0, pelvis);
 
   const legs = [-1, 1].map((side) => {
     const hip = joint(side * HIP_W, -0.02, 0, pelvis, 'ZXY');
-    part(capsule(0.075, 0.3), pantsMat, 0, -THIGH / 2, 0, hip);
+    part(GEO.thigh, mats.pants, 0, -THIGH / 2, 0, hip);
     const knee = joint(0, -THIGH, 0, hip);
-    part(capsule(0.062, 0.32), pantsMat, 0, -SHIN / 2, 0, knee);
+    part(GEO.shin, mats.pants, 0, -SHIN / 2, 0, knee);
     const ankle = joint(0, -SHIN, 0, knee);
-    part(new THREE.BoxGeometry(0.1, 0.07, 0.25), shoeMat, 0, -0.04, 0.05, ankle);
+    // Sneaker: bottom at y -0.075, toe at z 0.175, heel at z -0.075 (matches TOE / HEEL)
+    part(GEO.shoeUpper, mats.shoes, 0, -0.033, 0.052, ankle);
+    part(GEO.shoeSole, soleMat, 0, -0.064, 0.05, ankle);
     return { side, hip, knee, ankle, phaseOffset: side < 0 ? 0 : 0.5, wasStance: true };
   });
 
   const spine = joint(0, 0.08, 0, pelvis, 'YXZ');
-  const torso = part(capsule(0.17, 0.26), shirtMat, 0, 0.25, 0, spine);
-  torso.scale.set(1.15, 1, 0.72);
-  const neck = joint(0, 0.52, 0, spine, 'YXZ');
-  part(new THREE.CylinderGeometry(0.05, 0.06, 0.1, 10), skinMat, 0, 0, 0, neck);
-  const head = part(new THREE.SphereGeometry(0.115, 20, 14), skinMat, 0, 0.14, 0.01, neck);
-  head.scale.set(0.9, 1.12, 0.98);
+  part(GEO.torso, mats.shirt, 0, 0, 0, spine);
 
+  // ---------- Head + face ----------
+  const neck = joint(0, 0.52, 0, spine, 'YXZ');
+  part(GEO.neck, mats.skin, 0, 0.0, 0, neck);
+  const head = joint(0, 0.155, 0.012, neck);
+  const skull = part(GEO.skull, mats.skin, 0, 0, 0, head);
+  skull.scale.set(0.92, 1.04, 0.98);
+  // Eyes (slightly large and friendly), with pupils looking ahead
+  for (const s of [-1, 1]) {
+    sphere(0.024, eyeWhiteMat, s * 0.043, 0.012, 0.107, head, 1, 1.1, 0.72);
+    sphere(0.0125, pupilMat, s * 0.043, 0.011, 0.122, head, 1, 1.1, 0.6);
+    const brow = part(GEO.brow, mats.hair, s * 0.044, 0.05, 0.112, head);
+    brow.rotation.z = s * -0.12;
+    sphere(0.03, mats.skin, s * 0.117, 0.0, -0.005, head, 0.45, 1, 0.8);   // ears
+  }
+  sphere(0.019, mats.nose, 0, -0.016, 0.124, head, 0.95, 1.15, 1);         // nose
+  part(GEO.mouth, mouthMat, 0, -0.052, 0.116, head);                      // small smile
+
+  // Hair
+  if (look.hairStyle === 'buzz') {
+    part(GEO.buzzCap, mats.hair, 0, 0.012, -0.004, head).rotation.x = -0.18;
+  } else {
+    const cap = part(GEO.hairCap, mats.hair, 0, 0.008, -0.006, head);
+    cap.rotation.x = -0.22;
+    cap.scale.set(0.96, 1.02, 1.02);
+    if (look.hairStyle === 'swept' || look.hairStyle === 'short') {
+      const f = part(GEO.fringe, mats.hair, look.hairStyle === 'swept' ? 0.02 : 0, 0.088, 0.085, head);
+      f.rotation.set(-0.35, 0, look.hairStyle === 'swept' ? 0.25 : 0);
+    }
+    if (look.hairStyle === 'long') {
+      const back = part(GEO.longBack, mats.hair, 0, -0.02, -0.004, head);
+      back.scale.set(0.98, 1.25, 1.02);
+    }
+  }
+
+  // ---------- Arms ----------
   const arms = [-1, 1].map((side) => {
     const shoulder = joint(side * 0.235, 0.4, 0, spine, 'ZXY');
-    part(capsule(0.055, 0.2), shirtMat, 0, -0.14, 0, shoulder);
+    sphere(0.07, mats.shirt, 0, -0.01, 0, shoulder);                      // rounded shoulder
+    part(GEO.upperArm, mats.skin, 0, -0.14, 0, shoulder);
+    part(GEO.sleeve, mats.shirt, 0, -0.07, 0, shoulder);                  // T-shirt sleeve
     const elbow = joint(0, -0.29, 0, shoulder);
-    part(capsule(0.046, 0.2), skinMat, 0, -0.13, 0, elbow);
-    part(new THREE.SphereGeometry(0.05, 12, 8), skinMat, 0, -0.29, 0, elbow);
+    part(GEO.forearm, mats.skin, 0, -0.13, 0, elbow);
+    // Mitten-style hand with a thumb
+    sphere(0.046, mats.skin, 0, -0.29, 0.004, elbow, 0.72, 1.12, 0.92);
+    const thumb = part(GEO.thumb, mats.skin, -side * 0.026, -0.27, 0.022, elbow);
+    thumb.rotation.set(0.3, 0, side * 0.5);
     return { side, shoulder, elbow };
   });
 
@@ -338,7 +447,7 @@ export function createMannequin(shirtColor, groundAt = () => 0) {
   }
 
   function dispose() {
-    shirtMat.dispose();
+    for (const m of new Set(Object.values(mats))) m.dispose();
   }
 
   return {
