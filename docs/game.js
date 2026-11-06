@@ -14,7 +14,9 @@ const PLAYER_RADIUS = 0.35;
 const LIMIT = HALF - 1;        // edge of the walkable area
 const CAM_DISTANCE = 3.2;      // how far behind the player the camera sits
 const CAM_HEIGHT = 1.55;       // camera looks at this height on the player
-const CAM_SIDE = 0.6;          // shift the camera left (over the left shoulder); negative = right
+const CAM_SIDE = -0.6;         // sideways camera shift: positive = left, negative = right
+const CAM_BOB = 0.035;         // how much the camera bobs with each step
+const CAM_SWAY = 0.025;        // how much the camera tilts when moving left/right (radians)
 const MOUSE_SENSITIVITY = 0.0025;
 const SEND_INTERVAL = 1 / 20;  // send our position 20x per second while moving
 const HEARTBEAT = 2;           // ...and every 2 seconds even when standing still
@@ -127,6 +129,9 @@ const prev = new THREE.Vector3();
 let sendTimer = 0;
 let heartbeatTimer = 0;
 let lastSent = { x: NaN, z: NaN, ry: NaN };
+let bobPhase = 0;
+let bobAmount = 0;
+let camRoll = 0;
 
 function animate() {
   const dt = Math.min(clock.getDelta(), 0.1);
@@ -183,11 +188,21 @@ function animate() {
   }
 
   // --- Third-person camera orbiting behind the player ---
+  // Step bob: follows the walk rhythm, fades in/out with speed
+  bobAmount += (Math.min(mySpeed / WALK_SPEED, 1.3) - bobAmount) * Math.min(1, dt * 8);
+  bobPhase += dt * (3 + mySpeed * 1.6); // same rhythm as the mannequin's legs
+  const bobY = Math.abs(Math.sin(bobPhase)) * CAM_BOB * bobAmount;
+  const bobSide = Math.sin(bobPhase) * CAM_BOB * 0.4 * bobAmount;
+
+  // Sway: tilt slightly toward the side we're strafing to
+  const strafe = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
+  camRoll += (-strafe * CAM_SWAY - camRoll) * Math.min(1, dt * 6);
+
   // Both the camera and the point it looks at slide sideways, so the view stays
   // straight ahead and the player sits off to one side of the screen.
-  const lookY = mePos.y + CAM_HEIGHT;
-  const sideX = -right.x * CAM_SIDE;
-  const sideZ = -right.z * CAM_SIDE;
+  const lookY = mePos.y + CAM_HEIGHT + bobY;
+  const sideX = -right.x * (CAM_SIDE + bobSide);
+  const sideZ = -right.z * (CAM_SIDE + bobSide);
   camera.position.set(
     mePos.x + sideX + Math.sin(yaw) * Math.cos(pitch) * CAM_DISTANCE,
     lookY + Math.sin(pitch) * CAM_DISTANCE,
@@ -196,6 +211,7 @@ function animate() {
   // don't let the camera go underground on hills
   camera.position.y = Math.max(camera.position.y, heightAt(camera.position.x, camera.position.z) + 0.4);
   camera.lookAt(mePos.x + sideX, lookY, mePos.z + sideZ);
+  camera.rotateZ(camRoll);
 
   world.update(mePos);
   renderer.render(scene, camera);
