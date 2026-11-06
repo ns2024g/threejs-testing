@@ -140,13 +140,13 @@ export function createMannequin(shirtColor, groundAt = () => 0) {
     time += dt;
     speed = damp(speed, v, 10, dt);
     moveW = damp(moveW, smoothstep(0.05, 0.6, speed), 6, dt);
-    runW = damp(runW, smoothstep(2.6, 3.8, speed), 4, dt);
+    runW = damp(runW, smoothstep(2.1, 3.1, speed), 4, dt);
     lean = damp(lean, clamp(accel * 0.025, -0.12, 0.15), 5, dt);
     bank = damp(bank, clamp(-turnRate * speed * 0.03, -0.25, 0.25), 6, dt);
 
     // Cadence (stride cycles per second) rises with speed, like real people:
     // ~2.2 steps/s at a 1.6 m/s walk, ~2.8 steps/s at a 5.5 m/s run.
-    const freq = lerp(0.8 + 0.18 * speed, 1.2 + 0.04 * speed, runW);
+    const freq = lerp(0.88 + 0.18 * speed, 1.2 + 0.04 * speed, runW);
     phase = (phase + dt * freq) % 1;
 
     // Each cycle the body travels `stride` metres; the planted foot covers duty*stride of it.
@@ -191,7 +191,7 @@ export function createMannequin(shirtColor, groundAt = () => 0) {
         z = stanceLen * (front - t);
         // Walk: heel strike -> flat -> long heel rise and toe push-off
         let walkPitch;
-        if (t < 0.15) walkPitch = lerp(-0.32, 0, t / 0.15);
+        if (t < 0.18) walkPitch = lerp(-0.24, 0, smoothstep(0, 1, t / 0.18)); // soft heel roll
         else if (t < 0.62) walkPitch = 0;
         else walkPitch = lerp(0, 0.8, (t - 0.62) / 0.38);
         // Run: midfoot landing, short flat phase, then a powerful early push off the toes
@@ -206,7 +206,7 @@ export function createMannequin(shirtColor, groundAt = () => 0) {
         // Walk swing: low, smooth arc forward (Hermite curve that leaves and lands at ground speed)
         const wz = hermite(t, z0, groundTangent, z1, groundTangent);
         const wy = lift * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.7)), 1.3);
-        const wPitch = t < 0.45 ? lerp(0.8, 0.05, t / 0.45) : lerp(0.05, -0.32, (t - 0.45) / 0.55);
+        const wPitch = t < 0.45 ? lerp(0.8, 0.05, t / 0.45) : lerp(0.05, -0.24, (t - 0.45) / 0.55);
 
         // Run swing, keyframed from running biomechanics:
         //   toe-off -> heel kicks up behind (knee folds tight) -> knee drives forward
@@ -263,7 +263,7 @@ export function createMannequin(shirtColor, groundAt = () => 0) {
     const runCrouch = runW * 0.026 * moveW;
     const runBob = -0.036 * runW * amp * Math.cos(TAU * 2 * (phase - midStance));
     // Walkers are highest over the planted leg and lowest when both feet are down
-    const walkDip = -0.042 * amp * (1 - runW) * (0.5 - 0.5 * Math.cos(TAU * 2 * (phase - midStance)));
+    const walkDip = -0.032 * amp * (1 - runW) * (0.5 - 0.5 * Math.cos(TAU * 2 * (phase - midStance)));
     let pelvisY = STAND_HEIGHT - runCrouch + runBob + walkDip;
     const reach = THIGH + SHIN - 0.012;
     for (const leg of legs) {
@@ -272,8 +272,9 @@ export function createMannequin(shirtColor, groundAt = () => 0) {
       const maxY = leg.target.y + Math.sqrt(Math.max(0, reach * reach - dx * dx - dz * dz)) + 0.02;
       pelvisY = Math.min(pelvisY, maxY);
     }
-    // Drop instantly when needed, rise smoothly (muscles push the body up)
-    pelvisHeight = pelvisY < pelvisHeight ? pelvisY : damp(pelvisHeight, pelvisY, 14, dt);
+    // Drop quickly when needed (the knee gives a little to cushion each step),
+    // rise smoothly (muscles push the body up)
+    pelvisHeight = pelvisY < pelvisHeight ? damp(pelvisHeight, pelvisY, 45, dt) : damp(pelvisHeight, pelvisY, 12, dt);
 
     const sway = lerp(0.028, 0.01, runW) * moveW * -Math.cos(TAU * (phase - midStance));  // over the planted foot
     // Hips turn with the stride — more when running, peaking as each leg drives forward

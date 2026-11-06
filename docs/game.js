@@ -9,7 +9,7 @@ const { createMannequin } = await import(`./mannequin.js${VERSION}`);
 
 // ---------- Movement settings (real-world values) ----------
 const WALK_SPEED = 1.6;        // m/s — a normal human walk
-const RUN_SPEED = 5.5;         // m/s — a steady run (hold Shift)
+const RUN_SPEED = 3.4;         // m/s — an easy jog (hold Shift)
 const ACCELERATION = 6;        // how quickly you reach full speed (higher = snappier)
 const DECELERATION = 8;        // how quickly you come to a stop
 const TURN_SPEED = 9;          // how quickly the body turns to face the movement direction
@@ -145,7 +145,7 @@ let anchorReady = false;
 
 // Each heel strike gives the camera a small downward jolt, harder when running
 me.model.onFootstep = (side, speed) => {
-  stepKickVel -= CAM_STEP_KICK * (0.35 + Math.min(speed / RUN_SPEED, 1) * 1.4) * 60;
+  stepKickVel -= CAM_STEP_KICK * (0.2 + Math.min(speed / RUN_SPEED, 1) * 1.1) * 60;
 };
 
 // ---------- Game loop ----------
