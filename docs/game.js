@@ -12,8 +12,9 @@ const WALK_SPEED = 4.5;        // units per second
 const RUN_SPEED = 8;           // while holding Shift
 const PLAYER_RADIUS = 0.35;
 const LIMIT = HALF - 1;        // edge of the walkable area
-const CAM_DISTANCE = 5;
-const CAM_HEIGHT = 1.5;        // camera looks at this height on the player
+const CAM_DISTANCE = 3.2;      // how far behind the player the camera sits
+const CAM_HEIGHT = 1.55;       // camera looks at this height on the player
+const CAM_SIDE = 0.6;          // shift the camera left (over the left shoulder); negative = right
 const MOUSE_SENSITIVITY = 0.0025;
 const SEND_INTERVAL = 1 / 20;  // send our position 20x per second while moving
 const HEARTBEAT = 2;           // ...and every 2 seconds even when standing still
@@ -182,15 +183,19 @@ function animate() {
   }
 
   // --- Third-person camera orbiting behind the player ---
+  // Both the camera and the point it looks at slide sideways, so the view stays
+  // straight ahead and the player sits off to one side of the screen.
   const lookY = mePos.y + CAM_HEIGHT;
+  const sideX = -right.x * CAM_SIDE;
+  const sideZ = -right.z * CAM_SIDE;
   camera.position.set(
-    mePos.x + Math.sin(yaw) * Math.cos(pitch) * CAM_DISTANCE,
+    mePos.x + sideX + Math.sin(yaw) * Math.cos(pitch) * CAM_DISTANCE,
     lookY + Math.sin(pitch) * CAM_DISTANCE,
-    mePos.z + Math.cos(yaw) * Math.cos(pitch) * CAM_DISTANCE
+    mePos.z + sideZ + Math.cos(yaw) * Math.cos(pitch) * CAM_DISTANCE
   );
   // don't let the camera go underground on hills
   camera.position.y = Math.max(camera.position.y, heightAt(camera.position.x, camera.position.z) + 0.4);
-  camera.lookAt(mePos.x, lookY, mePos.z);
+  camera.lookAt(mePos.x + sideX, lookY, mePos.z + sideZ);
 
   world.update(mePos);
   renderer.render(scene, camera);
