@@ -26,13 +26,35 @@ const ANKLE_H = 0.075;       // ankle height above the ground when the foot is f
 const TOE = { y: -ANKLE_H, z: 0.175 };
 const HEEL = { y: -ANKLE_H, z: -0.075 };
 const HIP_W = 0.09;          // hip joints are this far left/right of centre
-const STAND_HEIGHT = 0.925;  // pelvis height when standing (knees very slightly soft)
+const STAND_HEIGHT = 0.972;  // pelvis height when standing (legs almost straight, knees ~8°)
 
 const TAU = Math.PI * 2;
 const clamp = THREE.MathUtils.clamp;
 const lerp = THREE.MathUtils.lerp;
 const smoothstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const damp = (cur, target, rate, dt) => cur + (target - cur) * (1 - Math.exp(-rate * dt));
+
+// Cubic Hermite curve from p0 to p1 with start/end slopes m0/m1 (t in 0..1)
+function hermite(t, p0, m0, p1, m1) {
+  const t2 = t * t, t3 = t2 * t;
+  return (2 * t3 - 3 * t2 + 1) * p0 + (t3 - 2 * t2 + t) * m0 + (-2 * t3 + 3 * t2) * p1 + (t3 - t2) * m1;
+}
+
+// Smooth curve through evenly spaced keyframes (t in 0..1). Optional start/end slopes
+// are in "per whole curve" units; otherwise they're picked automatically.
+function spline(t, keys, startSlope, endSlope) {
+  const n = keys.length - 1;
+  const f = clamp(t, 0, 1) * n;
+  const i = Math.min(Math.floor(f), n - 1);
+  const u = f - i;
+  const at = (k) => keys[clamp(k, 0, n)];
+  const slope = (k) => {
+    if (k === 0 && startSlope !== undefined) return startSlope / n;
+    if (k === n && endSlope !== undefined) return endSlope / n;
+    return (at(k + 1) - at(k - 1)) / (k === 0 || k === n ? 1 : 2);
+  };
+  return hermite(u, at(i), slope(i), at(i + 1), slope(i + 1));
+}
 
 const capsule = (r, len) => new THREE.CapsuleGeometry(r, len, 4, 10);
 
@@ -127,13 +149,20 @@ export function createMannequin(shirtColor, groundAt = () => 0) {
     const freq = lerp(0.8 + 0.18 * speed, 1.2 + 0.04 * speed, runW);
     phase = (phase + dt * freq) % 1;
 
-    // Each cycle the body travels `stride` metres; the planted foot covers duty*stride of it
-    const duty = lerp(0.6, 0.3, runW);                   // fraction of the cycle each foot is down
+    // Each cycle the body travels `stride` metres; the planted foot covers duty*stride of it.
+    // Walkers keep each foot down ~60% of the time. Runners spend far less time on the
+    // ground (about 0.18 s per step at 5.5 m/s) and fly between steps.
+    const runDuty = clamp(0.415 - 0.03 * speed, 0.22, 0.38);
+    const duty = lerp(0.6, runDuty, runW);
     const stride = speed / freq;
     const stanceLen = stride * duty;
-    const lift = lerp(0.07, 0.24, runW) * clamp(stride / 1.4, 0.3, 1);
-    const stepWidth = lerp(0.075, 0.05, runW);
-    const amp = moveW * clamp(speed / 1.3, 0, 1);         // gait intensity
+    const swingTime = (1 - duty) / freq;
+    // Walkers land well ahead of the hip; runners land closer underneath (less braking)
+    const front = lerp(0.42, 0.22, runW);
+    const lift = 0.07 * clamp(stride / 1.4, 0.3, 1);
+    const runHeight = clamp((speed - 2.2) / 3.3, 0.45, 1.15);  // faster = higher heel kick + knee drive
+    const stepWidth = lerp(0.075, 0.035, runW);                  // runners' feet land close to the midline
+    const amp = moveW * clamp(speed / 1.3, 0, 1);               // gait intensity
     const midStance = duty / 2;
 
     // Idle: slow weight shifting and breathing
@@ -152,26 +181,45 @@ export function createMannequin(shirtColor, groundAt = () => 0) {
       let z, y = 0, footPitch;
       const stance = p < duty;
 
+      const z0 = -(1 - front) * stanceLen;               // where the foot leaves the ground
+      const z1 = front * stanceLen;                      // where it lands
+      const groundTangent = -speed * swingTime;          // moving at ground speed (no scuffing)
+
       if (stance) {
         const t = p / duty;
-        // Planted: moves back under the body at exactly body speed (no sliding).
-        // Lands a bit ahead of the hip and leaves further behind it, like a real stride.
-        z = stanceLen * (0.42 - t);
-        if (t < 0.15) footPitch = lerp(-0.32, 0, t / 0.15);          // heel strike -> foot flat
-        else if (t < 0.62) footPitch = 0;
-        else footPitch = lerp(0, 0.8, (t - 0.62) / 0.38);            // heel rises, push off toes
+        // Planted: moves back under the body at exactly body speed (no sliding)
+        z = stanceLen * (front - t);
+        // Walk: heel strike -> flat -> long heel rise and toe push-off
+        let walkPitch;
+        if (t < 0.15) walkPitch = lerp(-0.32, 0, t / 0.15);
+        else if (t < 0.62) walkPitch = 0;
+        else walkPitch = lerp(0, 0.8, (t - 0.62) / 0.38);
+        // Run: midfoot landing, short flat phase, then a powerful early push off the toes
+        let runPitch;
+        if (t < 0.12) runPitch = lerp(-0.07, 0, t / 0.12);
+        else if (t < 0.4) runPitch = 0;
+        else runPitch = 1.0 * smoothstep(0.4, 1, t);
+        footPitch = lerp(walkPitch, runPitch, runW);
       } else {
         const t = (p - duty) / (1 - duty);
-        // Carried forward to the next step. The foot leaves the ground and lands moving at
-        // exactly ground speed (Hermite curve), so it never scuffs on lift-off or touchdown.
-        const z0 = -0.58 * stanceLen, z1 = 0.42 * stanceLen;
-        const m = -speed * (1 - duty) / freq;           // ground speed over the swing time
-        const t2 = t * t, t3 = t2 * t;
-        z = (2 * t3 - 3 * t2 + 1) * z0 + (t3 - 2 * t2 + t) * m + (-2 * t3 + 3 * t2) * z1 + (t3 - t2) * m;
-        y = lift * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.7)), 1.3);
-        footPitch = t < 0.45 ? lerp(0.8, 0.05, t / 0.45) : lerp(0.05, -0.32, (t - 0.45) / 0.55); // toes up before landing
+
+        // Walk swing: low, smooth arc forward (Hermite curve that leaves and lands at ground speed)
+        const wz = hermite(t, z0, groundTangent, z1, groundTangent);
+        const wy = lift * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.7)), 1.3);
+        const wPitch = t < 0.45 ? lerp(0.8, 0.05, t / 0.45) : lerp(0.05, -0.32, (t - 0.45) / 0.55);
+
+        // Run swing, keyframed from running biomechanics:
+        //   toe-off -> heel kicks up behind (knee folds tight) -> knee drives forward
+        //   -> lower leg reaches out -> foot paws back down to land under the body
+        const h = runHeight;
+        const rz = spline(t, [z0, z0 * 0.8, -0.2, 0.18, z1 + 0.14, z1], groundTangent, groundTangent);
+        const rY = Math.max(0, spline(t, [0, 0.21 * h, 0.35 * h, 0.32 * h, 0.14 * h, 0]));
+        const rPitch = spline(t, [1.0, 1.1, 0.65, 0.05, -0.18, -0.07]);
+
+        z = lerp(wz, rz, runW);
+        y = lerp(wy, rY, runW);
+        footPitch = lerp(wPitch, rPitch, runW);
       }
-      z += runW * 0.05 * moveW; // runners land a little ahead
 
       // Footstep event (heel strike)
       if (stance && !leg.wasStance && onFootstep && moveW > 0.5) onFootstep(leg.side, speed);
@@ -180,7 +228,10 @@ export function createMannequin(shirtColor, groundAt = () => 0) {
       // Blend between standing pose and gait
       const restZ = leg.side < 0 ? 0.035 : -0.025;
       // Legs that are planted, or about to land, decide how low the hips must be
-      leg.stance = stance || moveW < 0.5 || (runW < 0.5 && (p - duty) / (1 - duty) > 0.75);
+      // (A runner's trailing leg is peeling off the ground at the end of stance — it
+      // doesn't hold the hips down, so it's left out.)
+      leg.stance = (stance && !(runW > 0.3 && p / duty > 0.6)) || moveW < 0.5
+        || (runW <= 0.3 && (p - duty) / (1 - duty) > 0.75);
       z = lerp(restZ, z, moveW);
       y *= moveW;
       leg.footPitch = footPitch * moveW;
@@ -207,8 +258,10 @@ export function createMannequin(shirtColor, groundAt = () => 0) {
     // ---------- Pelvis ----------
     // Height: as high as standing allows, but never higher than the planted legs can reach.
     // This is what makes a real walk dip at each step (the legs work like a compass).
-    const runCrouch = runW * 0.05 * moveW;
-    const runBob = -0.03 * runW * amp * Math.cos(TAU * 2 * (phase - midStance)); // runners sink at mid-stance
+    // Runners sink as the stance knee absorbs the landing (lowest at mid-stance) and are
+    // highest in mid-flight
+    const runCrouch = runW * 0.026 * moveW;
+    const runBob = -0.036 * runW * amp * Math.cos(TAU * 2 * (phase - midStance));
     // Walkers are highest over the planted leg and lowest when both feet are down
     const walkDip = -0.042 * amp * (1 - runW) * (0.5 - 0.5 * Math.cos(TAU * 2 * (phase - midStance)));
     let pelvisY = STAND_HEIGHT - runCrouch + runBob + walkDip;
@@ -222,16 +275,18 @@ export function createMannequin(shirtColor, groundAt = () => 0) {
     // Drop instantly when needed, rise smoothly (muscles push the body up)
     pelvisHeight = pelvisY < pelvisHeight ? pelvisY : damp(pelvisHeight, pelvisY, 14, dt);
 
-    const sway = lerp(0.028, 0.012, runW) * moveW * -Math.cos(TAU * (phase - midStance)); // over the planted foot
-    const yaw = lerp(0.07, 0.12, runW) * amp * Math.cos(TAU * phase);                     // hips turn with the stride
-    const drop = lerp(0.06, 0.035, runW) * moveW * -Math.cos(TAU * (phase - midStance));   // swing side hip drops
-    const pitch = lerp(0.03, 0.12, runW) * moveW + lean;
+    const sway = lerp(0.028, 0.01, runW) * moveW * -Math.cos(TAU * (phase - midStance));  // over the planted foot
+    // Hips turn with the stride — more when running, peaking as each leg drives forward
+    const yaw = lerp(0.07, 0.13, runW) * amp * Math.cos(TAU * (phase - runW * 0.1));
+    const drop = lerp(0.06, 0.07, runW) * moveW * -Math.cos(TAU * (phase - midStance));    // swing side hip drops
+    const pitch = lerp(0.03, 0.09, runW) * moveW + lean;                                   // pelvis tilts forward
 
     pelvis.position.set(sway + shift, pelvisHeight, 0);
     pelvis.rotation.set(pitch, yaw, drop + bank + shift * 1.5);
 
-    // Upper body counter-rotates; head stays steady and looks ahead
-    spine.rotation.set(runW * 0.06 * moveW + breathe * 0.012 * idle, -yaw * 1.8, -drop * 0.75 - bank * 0.3);
+    // Upper body: runners lean forward from the ankles (~8° total) and the shoulders
+    // counter-rotate hard against the hips; the head stays steady and looks ahead
+    spine.rotation.set(runW * 0.05 * moveW + breathe * 0.012 * idle, -yaw * lerp(1.8, 2.1, runW), -drop * 0.75 - bank * 0.3);
     neck.rotation.set(-(pitch + spine.rotation.x) * 0.75, -(yaw + spine.rotation.y) * 0.9, -(pelvis.rotation.z + spine.rotation.z) * 0.85);
 
     pelvis.updateMatrix();
@@ -258,14 +313,26 @@ export function createMannequin(shirtColor, groundAt = () => 0) {
 
     // ---------- Arms ----------
     for (const arm of arms) {
-      // Opposite to the same-side leg, a touch behind it, more forward than back
+      // Opposite to the same-side leg, a touch behind it
       const c = Math.cos(TAU * (phase - 0.04) + (arm.side < 0 ? 0 : Math.PI));
-      const swing = lerp(0.32, 0.8, runW) * amp;
-      const s = swing * c * (c < 0 ? 1.15 : 0.7);      // negative = forward
+      const forwardness = Math.max(0, -c);              // 0..1, 1 = arm fully forward
+
+      // Walk: relaxed pendulum swing, more forward than back, elbow bends coming forward
+      const walkSwing = 0.32 * c * (c < 0 ? 1.15 : 0.7);
+      const walkElbow = 0.3 + forwardness * 0.32 * 0.6;
+
+      // Run: elbows held near 90°, arms drive from the shoulder — hand comes up to chest
+      // height in front and back past the hip behind; the elbow closes slightly as it
+      // comes forward and opens on the back swing
+      const runSwing = (c < 0 ? 0.8 : 0.6) * c * clamp(speed / 5, 0.6, 1.1);
+      const runElbow = 1.5 + forwardness * 0.25 - Math.max(0, c) * 0.25;
+
+      const s = lerp(walkSwing, runSwing, runW) * amp;  // negative = forward
       arm.shoulder.rotation.x = s + breathe * 0.015 * idle;
-      arm.shoulder.rotation.z = arm.side * (0.07 + runW * 0.12 * moveW);
-      const elbowBase = lerp(0.18, lerp(0.3, 1.45, runW), moveW);
-      arm.elbow.rotation.x = -(elbowBase + Math.max(0, -s) * 0.6);
+      // Runners carry their arms slightly out, and the hands cross toward the midline in front
+      arm.shoulder.rotation.z = arm.side * (0.07 + runW * moveW * (0.1 - 0.08 * forwardness));
+      arm.shoulder.rotation.y = -arm.side * runW * moveW * 0.35;
+      arm.elbow.rotation.x = -lerp(0.18, lerp(walkElbow, runElbow, runW), moveW);
     }
   }
 
