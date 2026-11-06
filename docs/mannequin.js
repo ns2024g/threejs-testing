@@ -86,13 +86,21 @@ export function createMannequin(shirtColor) {
     arms[0].elbow.rotation.x = -0.15 - 0.35 * amount;
     arms[1].elbow.rotation.x = -0.15 - 0.35 * amount;
 
-    body.position.y = -Math.abs(Math.cos(phase)) * 0.045 * Math.min(amount, 1);
-    body.rotation.x = 0.05 * Math.min(amount, 1.4); // lean into the walk
+    // Natural body sway while walking:
+    //  - dips smoothly at each footstep (lowest when the legs are spread, highest mid-step)
+    //  - shifts sideways over whichever foot is on the ground
+    //  - leans slightly toward that foot
+    const a = Math.min(amount, 1.3);
+    body.position.y = -(0.5 - 0.5 * Math.cos(phase * 2)) * 0.045 * a;
+    body.position.x = Math.cos(phase) * 0.035 * a;
+    body.rotation.z = -Math.cos(phase) * 0.035 * a;
+    body.rotation.x = 0.05 * a; // lean into the walk
   }
 
   function dispose() {
     shirtMat.dispose();
   }
 
-  return { root, animate, dispose };
+  // `body` is exposed so the camera can follow its sway
+  return { root, body, animate, dispose };
 }
