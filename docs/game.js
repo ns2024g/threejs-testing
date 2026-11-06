@@ -12,11 +12,12 @@ const WALK_SPEED = 4.5;        // units per second
 const RUN_SPEED = 8;           // while holding Shift
 const PLAYER_RADIUS = 0.35;
 const LIMIT = HALF - 1;        // edge of the walkable area
-const CAM_DISTANCE = 3.2;      // how far behind the player the camera sits
+const CAM_DISTANCE = 2.5;      // how far behind the player the camera sits
 const CAM_HEIGHT = 1.55;       // camera looks at this height on the player
 const CAM_SIDE = -0.6;         // sideways camera shift: positive = left, negative = right
 const CAM_BOB = 0.035;         // how much the camera bobs with each step
 const CAM_SWAY = 0.025;        // how much the camera tilts when moving left/right (radians)
+const CAM_WALK_ROLL = 0.012;   // gentle side-to-side tilt with each step (radians)
 const MOUSE_SENSITIVITY = 0.0025;
 const SEND_INTERVAL = 1 / 20;  // send our position 20x per second while moving
 const HEARTBEAT = 2;           // ...and every 2 seconds even when standing still
@@ -191,8 +192,11 @@ function animate() {
   // Step bob: follows the walk rhythm, fades in/out with speed
   bobAmount += (Math.min(mySpeed / WALK_SPEED, 1.3) - bobAmount) * Math.min(1, dt * 8);
   bobPhase += dt * (3 + mySpeed * 1.6); // same rhythm as the mannequin's legs
-  const bobY = Math.abs(Math.sin(bobPhase)) * CAM_BOB * bobAmount;
-  const bobSide = Math.sin(bobPhase) * CAM_BOB * 0.4 * bobAmount;
+  // Realistic walk sway: the head dips smoothly on every footstep (twice per stride),
+  // drifts toward the planted foot once per stride, and tilts gently with that drift.
+  const bobY = (0.5 - 0.5 * Math.cos(bobPhase * 2)) * CAM_BOB * bobAmount;
+  const bobSide = Math.sin(bobPhase) * CAM_BOB * 0.6 * bobAmount;
+  const walkRoll = Math.sin(bobPhase) * CAM_WALK_ROLL * bobAmount;
 
   // Sway: tilt slightly toward the side we're strafing to
   const strafe = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
@@ -211,7 +215,7 @@ function animate() {
   // don't let the camera go underground on hills
   camera.position.y = Math.max(camera.position.y, heightAt(camera.position.x, camera.position.z) + 0.4);
   camera.lookAt(mePos.x + sideX, lookY, mePos.z + sideZ);
-  camera.rotateZ(camRoll);
+  camera.rotateZ(camRoll + walkRoll);
 
   world.update(mePos);
   renderer.render(scene, camera);
