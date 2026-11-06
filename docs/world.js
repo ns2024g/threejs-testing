@@ -96,6 +96,15 @@ export function collide(pos, radius) {
   }
 }
 
+/** True if a circle of `radius` at (x, z) overlaps a tree or big rock. */
+export function isBlocked(x, z, radius) {
+  for (const o of obstacles.near(x, z)) {
+    const min = o.r + radius;
+    if ((x - o.x) ** 2 + (z - o.z) ** 2 < min * min) return true;
+  }
+  return false;
+}
+
 // ---------- Build everything ----------
 export function createWorld(scene, renderer) {
   const rng = mulberry32(SEED);
