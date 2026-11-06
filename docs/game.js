@@ -82,6 +82,40 @@ const me = addPlayer(selfId, { x: (Math.random() - 0.5) * 8, z: (Math.random() -
 const mePos = me.model.root.position;
 const velocity = new THREE.Vector3();
 
+// ---------- Light carried by the player ----------
+// A soft warm glow all around, plus a wider, brighter wash reaching out ahead
+// (like a lantern held in front). Settings are at the top of this section.
+const GLOW_INTENSITY = 5;      // soft light around the player
+const GLOW_RANGE = 10;
+const AHEAD_INTENSITY = 70;    // extra light in front
+const AHEAD_RANGE = 24;
+const AHEAD_WIDTH = 0.85;      // spread of the forward light (radians)
+const lightColor = 0xffd9a8;
+
+const glow = new THREE.PointLight(lightColor, GLOW_INTENSITY, GLOW_RANGE, 2);
+const ahead = new THREE.SpotLight(lightColor, AHEAD_INTENSITY, AHEAD_RANGE, AHEAD_WIDTH, 1, 2);
+ahead.castShadow = true;                 // trees and grass cast shadows away from you
+ahead.shadow.mapSize.set(1024, 1024);
+ahead.shadow.camera.near = 0.3;
+ahead.shadow.bias = -0.0005;
+ahead.shadow.normalBias = 0.03;
+scene.add(glow, ahead, ahead.target);
+const aheadAim = new THREE.Vector3();
+
+function updatePlayerLight(dt) {
+  const ry = me.model.root.rotation.y;
+  const fx = Math.sin(ry), fz = Math.cos(ry);
+  glow.position.set(mePos.x + fx * 0.3, mePos.y + 1.3, mePos.z + fz * 0.3);
+  ahead.position.set(mePos.x + fx * 0.35, mePos.y + 1.85, mePos.z + fz * 0.35);
+  // Aim a few metres ahead on the ground, smoothed so it doesn't jitter with each step
+  const tx = mePos.x + fx * 7, tz = mePos.z + fz * 7;
+  if (aheadAim.lengthSq() === 0) aheadAim.set(tx, heightAt(tx, tz), tz);
+  aheadAim.x = damp(aheadAim.x, tx, 8, dt);
+  aheadAim.z = damp(aheadAim.z, tz, 8, dt);
+  aheadAim.y = heightAt(aheadAim.x, aheadAim.z);
+  ahead.target.position.copy(aheadAim);
+}
+
 // ---------- Peer-to-peer networking ----------
 const statusEl = document.getElementById('status');
 const updateStatus = () => {
@@ -235,6 +269,7 @@ function animate() {
   }
 
   updateCamera(dt);
+  updatePlayerLight(dt);
   world.update(mePos);
   renderer.render(scene, camera);
   requestAnimationFrame(animate);

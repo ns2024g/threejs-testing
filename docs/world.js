@@ -1,7 +1,6 @@
 // Builds the forest world: sky, sunlight, fog, hilly ground, trees, rocks, bushes and grass.
 // Everything is generated from a fixed seed, so every player sees the exact same forest.
 import * as THREE from 'three';
-import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export const WORLD_SIZE = 200;              // walkable area is WORLD_SIZE x WORLD_SIZE
@@ -113,44 +112,65 @@ export function createWorld(scene, renderer) {
 
   // --- Renderer look ---
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.7;
+  renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-  // --- Sky + sun ---
-  const sky = new Sky();
-  sky.scale.setScalar(10000);
-  const u = sky.material.uniforms;
-  u.turbidity.value = 6;
-  u.rayleigh.value = 1.6;
-  u.mieCoefficient.value = 0.004;
-  u.mieDirectionalG.value = 0.8;
+  // --- Night sky ---
+  // Moon high in the sky, behind the trees from the spawn point
+  const sunDir = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - 48), THREE.MathUtils.degToRad(200));
 
-  const sunDir = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - 32), THREE.MathUtils.degToRad(150));
-  u.sunPosition.value.copy(sunDir);
+  const nightColor = new THREE.Color(0x060912);
+  scene.background = nightColor;
+  scene.fog = new THREE.FogExp2(nightColor, 0.035);   // the forest fades into darkness
 
-  // Use the sky as the light that reflects off everything (realistic ambient light)
+  // Faint night-sky ambient: deep blue from above, almost nothing from the ground
   const pmrem = new THREE.PMREMGenerator(renderer);
   const envScene = new THREE.Scene();
-  envScene.add(sky);
+  const envSphere = new THREE.Mesh(
+    new THREE.SphereGeometry(10, 32, 16),
+    new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'varying vec3 vP; void main(){ float h = clamp(vP.y * 0.5 + 0.5, 0.0, 1.0); gl_FragColor = vec4(mix(vec3(0.004, 0.004, 0.006), vec3(0.03, 0.045, 0.09), h * h), 1.0); }',
+    })
+  );
+  envScene.add(envSphere);
   scene.environment = pmrem.fromScene(envScene).texture;
-  scene.environmentIntensity = 0.55;
-  scene.add(sky);
+  scene.environmentIntensity = 1;
 
-  const fogColor = new THREE.Color(0x9fb3bf);
-  scene.fog = new THREE.FogExp2(fogColor, 0.014);
-  scene.background = fogColor;
+  // Stars (drawn on a far-away sphere, unaffected by fog)
+  const STARS = 1800;
+  const starPos = new Float32Array(STARS * 3);
+  const starRng = mulberry32(SEED + 5);
+  for (let i = 0; i < STARS; i++) {
+    const v = new THREE.Vector3().setFromSphericalCoords(300, Math.acos(starRng() * 0.95), starRng() * Math.PI * 2);
+    starPos.set([v.x, v.y, v.z], i * 3);
+  }
+  const starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+  const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xcfd8ff, size: 1.4, sizeAttenuation: false, fog: false }));
+  scene.add(stars);
 
-  const sun = new THREE.DirectionalLight(0xfff0d6, 3.2);
+  // The moon
+  const moon = new THREE.Mesh(
+    new THREE.SphereGeometry(9, 24, 16),
+    new THREE.MeshBasicMaterial({ color: 0xe8ecff, fog: false })
+  );
+  scene.add(moon);
+
+  // Moonlight: dim, cool blue, casting soft long shadows from the trees
+  const sun = new THREE.DirectionalLight(0x9db4ff, 0.7);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.radius = 4;
   const sc = sun.shadow.camera;
   sc.left = -35; sc.right = 35; sc.top = 35; sc.bottom = -35; sc.near = 1; sc.far = 160;
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.03;
   scene.add(sun, sun.target);
 
-  scene.add(new THREE.HemisphereLight(0xbfd4e6, 0x3b3226, 0.35));
+  scene.add(new THREE.HemisphereLight(0x1d2a4a, 0x050403, 0.35));
 
   // --- Ground ---
   const groundSize = FOREST_EDGE * 2 + 20;
@@ -302,6 +322,9 @@ export function createWorld(scene, renderer) {
   function update(center) {
     sun.position.copy(center).addScaledVector(sunDir, 80);
     sun.target.position.copy(center);
+    // Sky objects travel with the player so they always look infinitely far away
+    stars.position.copy(center);
+    moon.position.copy(center).addScaledVector(sunDir, 300);
   }
 
   return { update };
