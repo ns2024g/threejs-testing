@@ -28,6 +28,15 @@
     <div id="status">Connecting…</div>
     <div>Click to look around · WASD to move · Shift to run · Esc to free mouse</div>
   </div>
-  <script type="module" src="game.js"></script>
+  <script type="module">
+    // Always load the newest game files: version.txt is fetched fresh (never from cache)
+    // and its value is added to every game file's URL, so browsers can't reuse old copies.
+    let v = 'dev-' + Date.now();
+    try {
+      const res = await fetch('version.txt', { cache: 'no-store' });
+      if (res.ok) v = (await res.text()).trim();
+    } catch {}
+    await import(`./game.js?v=${encodeURIComponent(v)}`);
+  </script>
 </body>
 </html>

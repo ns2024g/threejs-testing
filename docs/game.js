@@ -1,7 +1,11 @@
 import * as THREE from 'three';
 import { joinRoom, selfId } from 'trystero';
-import { createWorld, heightAt, collide, HALF } from './world.js';
-import { createMannequin } from './mannequin.js';
+
+// Load our other files with the same version tag this file was loaded with (see index.html),
+// so an update never mixes new and old cached files.
+const VERSION = new URL(import.meta.url).search;
+const { createWorld, heightAt, collide, HALF } = await import(`./world.js${VERSION}`);
+const { createMannequin } = await import(`./mannequin.js${VERSION}`);
 
 // ---------- Settings ----------
 const WALK_SPEED = 4.5;        // units per second
