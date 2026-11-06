@@ -5,11 +5,13 @@ import { joinRoom, selfId } from 'trystero';
 // so an update never mixes new and old cached files.
 const VERSION = new URL(import.meta.url).search;
 const { createWorld, heightAt, collide, isBlocked, HALF } = await import(`./world.js${VERSION}`);
-const { createMannequin } = await import(`./mannequin.js${VERSION}`);
+const { loadCharacters, createCharacter } = await import(`./character.js${VERSION}`);
 
-// ---------- Movement settings (real-world values) ----------
-const WALK_SPEED = 1.6;        // m/s — a normal human walk
-const RUN_SPEED = 3.4;         // m/s — an easy jog (hold Shift)
+// ---------- Movement settings ----------
+// The cartoon characters have short legs, so (like a child) their natural walking and
+// jogging speeds are lower than an adult's; the animation scales to their leg length.
+const WALK_SPEED = 1.2;        // m/s — a relaxed walk for these characters
+const RUN_SPEED = 2.4;         // m/s — an easy jog (hold Shift)
 const ACCELERATION = 6;        // how quickly you reach full speed (higher = snappier)
 const DECELERATION = 8;        // how quickly you come to a stop
 const TURN_SPEED = 9;          // how quickly the body turns to face the movement direction
@@ -17,9 +19,9 @@ const PLAYER_RADIUS = 0.35;
 const LIMIT = HALF - 1;        // edge of the walkable area
 
 // ---------- Camera settings ----------
-const CAM_DISTANCE = 2.5;      // how far behind the player the camera sits
+const CAM_DISTANCE = 3.4;      // how far behind the player the camera sits
 const CAM_RUN_EXTRA = 0.45;    // camera pulls back this much more when running
-const CAM_HEIGHT = 0.3;        // camera aims this far above the chest
+const CAM_HEIGHT = 0.6;        // camera aims this far above the neck (over the big cartoon head)
 const CAM_SIDE = -0.6;         // sideways shift: positive = left, negative = right shoulder
 const CAM_FOV = 62;
 const CAM_RUN_FOV = 70;        // field of view widens a little at a run
@@ -46,6 +48,8 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(CAM_FOV, window.innerWidth / window.innerHeight, 0.05, 400);
 const world = createWorld(scene, renderer);
+document.getElementById('status').textContent = 'Loading characters…';
+await loadCharacters();
 window.game = { renderer, scene, camera }; // handy for debugging in the browser console
 
 const damp = (cur, target, rate, dt) => cur + (target - cur) * (1 - Math.exp(-rate * dt));
@@ -60,7 +64,7 @@ const players = {}; // peerId -> { model, target, targetRy, speed, lastRy }
 
 function addPlayer(id, data) {
   if (players[id]) return players[id];
-  const model = createMannequin(data.color, heightAt);
+  const model = createCharacter(data.color, heightAt);
   model.root.position.set(data.x, heightAt(data.x, data.z), data.z);
   model.root.rotation.y = data.ry || 0;
   scene.add(model.root);

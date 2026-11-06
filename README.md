@@ -15,3 +15,10 @@ npm start
 ```
 
 Then open http://localhost:3000.
+
+## Credits
+
+- Characters: "Rogue" and "Rogue (Hooded)" from the
+  [KayKit Adventurers Character Pack](https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0)
+  by Kay Lousberg ([kaylousberg.com](https://www.kaylousberg.com)) — CC0. Trimmed for the web
+  (built-in animations and weapons removed); animated by this project's own walk/jog system.
