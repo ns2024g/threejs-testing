@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>THREEJS Testing</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: system-ui, sans-serif; }
+    canvas { display: block; }
+    #hud {
+      position: fixed; top: 12px; left: 12px; color: #fff;
+      background: rgba(0, 0, 0, 0.45); padding: 8px 12px; border-radius: 6px;
+      font-size: 14px; pointer-events: none;
+    }
+  </style>
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <div id="hud">Click to look around · WASD to move · Esc to free mouse</div>
+  <script type="module" src="game.js"></script>
+</body>
+</html>

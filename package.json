@@ -1,0 +1,15 @@
+{
+  "name": "threejs-testing",
+  "version": "1.0.0",
+  "description": "Multiplayer 3D web game built with three.js",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
