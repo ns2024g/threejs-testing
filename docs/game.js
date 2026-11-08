@@ -4,20 +4,11 @@ import { joinRoom, selfId } from 'trystero';
 // Load our other files with the same version tag this file was loaded with (see index.html),
 // so an update never mixes new and old cached files.
 const VERSION = new URL(import.meta.url).search;
+const { setLoading, finishLoading } = await import(`./loader.js${VERSION}`);
+setLoading(0.1);
 const { createWorld, heightAt, collide, isBlocked, addObstacle, HALF } = await import(`./world.js${VERSION}`);
 const { createCreature1, loadCreature1Geometry } = await import(`./creature1.js${VERSION}`);
 const { loadCharacters, createCharacter } = await import(`./character.js${VERSION}`);
-
-// ---------- Loading screen ----------
-const loaderEl = document.getElementById('loader');
-const loaderBar = document.getElementById('loader-bar');
-const loaderPercent = document.getElementById('loader-percent');
-function setLoading(fraction) {
-  const percent = Math.round(fraction * 100);
-  loaderBar.style.width = `${percent}%`;
-  loaderPercent.textContent = `${percent}%`;
-}
-setLoading(0.1);
 
 // ---------- Movement settings (real-world values) ----------
 const WALK_SPEED = 1.6;        // m/s — a normal human walk
@@ -370,8 +361,6 @@ function updateCamera(dt) {
 // Prepare the graphics before revealing the game, so the first frame doesn't stutter
 setLoading(0.9);
 await renderer.compileAsync(scene, camera);
-setLoading(1);
-loaderEl.classList.add('done');
-setTimeout(() => loaderEl.remove(), 900);
+finishLoading();
 clock.getDelta(); // don't count the loading time as the first frame
 animate();
