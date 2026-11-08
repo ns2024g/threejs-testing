@@ -11,18 +11,11 @@ const CSS = `
     transition: opacity 0.8s ease;
   }
   #loader.done { opacity: 0; pointer-events: none; }
-  #loader-text {
-    margin: 0; font-size: clamp(22px, 5vw, 42px); font-weight: normal; letter-spacing: 0.22em;
-    animation: flicker 3.7s infinite;
-  }
+  #loader-text { margin: 0; font-size: clamp(22px, 5vw, 42px); font-weight: normal; letter-spacing: 0.22em; }
+  #loader-text:empty { display: none; }
   #loader-track { width: min(420px, 80vw); height: 3px; background: #1d1212; }
   #loader-bar { width: 0; height: 100%; background: #9c0f0f; box-shadow: 0 0 10px #c01212; transition: width 0.2s linear; }
   #loader-percent { font-size: 13px; letter-spacing: 0.3em; color: #6d6a64; }
-  @keyframes flicker {
-    0%, 7%, 9%, 46%, 49%, 52%, 83%, 100% { opacity: 0.9; }
-    8%, 47%, 51%, 84% { opacity: 0.12; }
-  }
-  @media (prefers-reduced-motion: reduce) { #loader-text { animation: none; } }
 `;
 
 const style = document.createElement('style');
@@ -35,11 +28,12 @@ if (!root) {
   root = document.createElement('div');
   root.id = 'loader';
   root.innerHTML = `
-    <h1 id="loader-text">IT KNOWS YOU'RE HERE</h1>
+    <h1 id="loader-text"></h1>
     <div id="loader-track"><div id="loader-bar"></div></div>
     <div id="loader-percent">0%</div>`;
   document.body.appendChild(root);
 }
+document.getElementById('loader-text').textContent = ''; // no message (a saved older page may have one)
 const bar = document.getElementById('loader-bar');
 const percentEl = document.getElementById('loader-percent');
 
