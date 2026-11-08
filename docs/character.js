@@ -68,8 +68,10 @@ export function createCharacter(color, groundAt) {
 
   return {
     root: rig.root,
-    chest: J.spine,                 // the camera follows this
+    head: J.neck,                   // the first-person camera follows this
     animate: rig.animate,
+    /** Invisible to the camera, but still casts a shadow (for your own first-person body). */
+    hideFromView() { mat.colorWrite = false; mat.depthWrite = false; },
     dispose() { mat.dispose(); },
     get runAmount() { return rig.runAmount; },
     set onFootstep(fn) { rig.onFootstep = fn; },

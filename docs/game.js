@@ -6,7 +6,7 @@ import { joinRoom, selfId } from 'trystero';
 const VERSION = new URL(import.meta.url).search;
 const { setLoading, finishLoading } = await import(`./loader.js${VERSION}`);
 setLoading(0.1);
-const { createWorld, heightAt, collide, isBlocked, addObstacle, HALF } = await import(`./world.js${VERSION}`);
+const { createWorld, heightAt, collide, addObstacle, HALF } = await import(`./world.js${VERSION}`);
 const { createCreature1, loadCreature1Geometry } = await import(`./creature1.js${VERSION}`);
 const { loadCharacters, createCharacter } = await import(`./character.js${VERSION}`);
 
@@ -20,14 +20,11 @@ const PLAYER_RADIUS = 0.35;
 const LIMIT = HALF - 1;        // edge of the walkable area
 
 // ---------- Camera settings ----------
-const CAM_DISTANCE = 2.5;      // how far behind the player the camera sits
-const CAM_RUN_EXTRA = 0.45;    // camera pulls back this much more when running
-const CAM_HEIGHT = 0.3;        // camera aims this far above the chest
-const CAM_SIDE = -0.6;         // sideways shift: positive = left, negative = right shoulder
-const CAM_FOV = 62;
-const CAM_RUN_FOV = 70;        // field of view widens a little at a run
-const CAM_FOLLOW = 14;         // how tightly the camera follows horizontally (lower = more lag)
-const CAM_FOLLOW_Y = 7;        // vertical follow — softer, so it absorbs the body's bounce
+const EYE_HEIGHT = 0.12;       // eyes are this far above the base of the neck (about 1.69 m tall)
+const CAM_FOV = 75;
+const CAM_RUN_FOV = 80;        // field of view widens a little at a run
+const CAM_FOLLOW = 30;         // how tightly the view follows the head side to side
+const CAM_FOLLOW_Y = 12;       // vertical follow — softer, so it absorbs some of the bounce
 const CAM_STEP_KICK = 0.012;   // how hard each footstep jolts the camera
 const CAM_STRAFE_TILT = 0.02;  // tilt when moving left/right (radians)
 const CAM_SHAKE = 0.0012;      // subtle handheld drift
@@ -86,6 +83,7 @@ const myColor = `hsl(${Math.floor(Math.random() * 360)}, 45%, 42%)`;
 const me = addPlayer(selfId, { x: (Math.random() - 0.5) * 8, z: (Math.random() - 0.5) * 8, ry: 0, color: myColor });
 const mePos = me.model.root.position;
 const velocity = new THREE.Vector3();
+me.model.hideFromView();   // first person: you don't see your own body, only its shadow
 
 // ---------- Creature 1 ----------
 // Stands at the far side of the spawn clearing, facing the players. Its body is sculpted
@@ -97,7 +95,7 @@ creature.object.position.set(CREATURE_POS.x, heightAt(CREATURE_POS.x, CREATURE_P
 creature.object.rotation.y = Math.PI;       // the model faces +Z; turn it toward the spawn point
 scene.add(creature.object);
 addObstacle(CREATURE_POS.x, CREATURE_POS.z, 0.35);
-creature.watch(me.model.chest);             // head and eyes follow your character
+creature.watch(me.model.head);              // head and eyes follow your character
 window.game.creature = creature;            // try game.creature.scream() in the browser console
 
 // ---------- Light carried by the player ----------
@@ -121,8 +119,8 @@ scene.add(glow, ahead, ahead.target);
 const aheadAim = new THREE.Vector3();
 
 function updatePlayerLight(dt) {
-  const ry = me.model.root.rotation.y;
-  const fx = Math.sin(ry), fz = Math.cos(ry);
+  // The light points where you're looking
+  const fx = forward.x, fz = forward.z;
   glow.position.set(mePos.x + fx * 0.3, mePos.y + 1.3, mePos.z + fz * 0.3);
   ahead.position.set(mePos.x + fx * 0.35, mePos.y + 1.85, mePos.z + fz * 0.35);
   // Aim a few metres ahead on the ground, smoothed so it doesn't jitter with each step
@@ -169,14 +167,14 @@ addEventListener('keydown', (e) => { keys[e.code] = true; });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 
-let targetYaw = Math.PI, yaw = Math.PI;   // camera angle around the player
-let targetPitch = 0.22, pitch = 0.22;     // camera angle above the ground
+let targetYaw = Math.PI, yaw = Math.PI;   // which way you're facing (starts toward the creature)
+let targetPitch = 0, pitch = 0;           // looking up (negative) or down (positive)
 
 renderer.domElement.addEventListener('click', () => renderer.domElement.requestPointerLock());
 addEventListener('mousemove', (e) => {
   if (document.pointerLockElement !== renderer.domElement) return;
   targetYaw -= e.movementX * MOUSE_SENSITIVITY;
-  targetPitch = THREE.MathUtils.clamp(targetPitch + e.movementY * MOUSE_SENSITIVITY, -0.35, 1.2);
+  targetPitch = THREE.MathUtils.clamp(targetPitch + e.movementY * MOUSE_SENSITIVITY, -1.45, 1.45);
 });
 
 addEventListener('resize', () => {
@@ -186,11 +184,9 @@ addEventListener('resize', () => {
 });
 
 // ---------- Camera rig state ----------
-const camAnchor = new THREE.Vector3();   // smoothed point the camera follows (the chest)
-const chestPos = new THREE.Vector3();
+const camAnchor = new THREE.Vector3();   // smoothed point the camera follows (the head)
+const headPos = new THREE.Vector3();
 const lookAt = new THREE.Vector3();
-const desired = new THREE.Vector3();
-let camDist = CAM_DISTANCE;
 let camRoll = 0;
 let stepKick = 0, stepKickVel = 0;       // footstep jolt (a small spring)
 let anchorReady = false;
@@ -255,6 +251,9 @@ function animate() {
     const before = root.rotation.y;
     root.rotation.y += angleDiff(before, Math.atan2(velocity.x, velocity.z)) * (1 - Math.exp(-TURN_SPEED * dt));
     turnRate = angleDiff(before, root.rotation.y) / Math.max(dt, 1e-4);
+  } else {
+    // Standing still: the body turns to face where you're looking (other players see this)
+    root.rotation.y += angleDiff(root.rotation.y, yaw + Math.PI) * (1 - Math.exp(-TURN_SPEED * dt));
   }
   me.model.animate(dt, speed, turnRate, accel);
 
@@ -294,18 +293,18 @@ function animate() {
   requestAnimationFrame(animate);
 }
 
-// ---------- Realistic third-person camera ----------
+// ---------- First-person camera ----------
 function updateCamera(dt) {
   const runAmount = me.model.runAmount;
 
-  // Follow the chest (not the feet), with a little lag. Vertical follow is softer, so the
-  // camera rides the body's motion like a real operator instead of copying every bounce.
+  // The eyes ride on the head, so the view moves with the body's real walk and jog. Vertical
+  // follow is softer because people's eyes naturally steady their view while walking.
   me.model.root.updateMatrixWorld(true);
-  me.model.chest.getWorldPosition(chestPos);
-  if (!anchorReady) { camAnchor.copy(chestPos); anchorReady = true; }
-  camAnchor.x = damp(camAnchor.x, chestPos.x, CAM_FOLLOW, dt);
-  camAnchor.z = damp(camAnchor.z, chestPos.z, CAM_FOLLOW, dt);
-  camAnchor.y = damp(camAnchor.y, chestPos.y, CAM_FOLLOW_Y, dt);
+  me.model.head.getWorldPosition(headPos);
+  if (!anchorReady) { camAnchor.copy(headPos); anchorReady = true; }
+  camAnchor.x = damp(camAnchor.x, headPos.x, CAM_FOLLOW, dt);
+  camAnchor.z = damp(camAnchor.z, headPos.z, CAM_FOLLOW, dt);
+  camAnchor.y = damp(camAnchor.y, headPos.y, CAM_FOLLOW_Y, dt);
 
   // Footstep jolt: a slightly bouncy spring kicked on every heel strike
   const k = 220, c = 2 * Math.sqrt(k) * 0.45;
@@ -317,29 +316,13 @@ function updateCamera(dt) {
   const driftX = (Math.sin(time * 0.9) + Math.sin(time * 2.3 + 1.3) * 0.5) * shake;
   const driftY = (Math.sin(time * 1.1 + 2.1) + Math.sin(time * 2.9) * 0.4) * shake;
 
-  // Aim point: above the chest, off to the shoulder
+  // Stand at eye level and look along yaw + pitch
+  camera.position.set(camAnchor.x, camAnchor.y + EYE_HEIGHT + stepKick, camAnchor.z);
   lookAt.set(
-    camAnchor.x - right.x * CAM_SIDE,
-    camAnchor.y + CAM_HEIGHT + stepKick,
-    camAnchor.z - right.z * CAM_SIDE
+    camera.position.x - Math.sin(yaw) * Math.cos(pitch),
+    camera.position.y - Math.sin(pitch),
+    camera.position.z - Math.cos(yaw) * Math.cos(pitch)
   );
-
-  // Pull back when running; pull in if a tree is between the player and the camera
-  const wantDist = CAM_DISTANCE + CAM_RUN_EXTRA * runAmount;
-  const dirX = Math.sin(yaw) * Math.cos(pitch);
-  const dirY = Math.sin(pitch);
-  const dirZ = Math.cos(yaw) * Math.cos(pitch);
-  let freeDist = wantDist;
-  const STEPS = 12;
-  for (let i = 1; i <= STEPS; i++) {
-    const d = (i / STEPS) * wantDist;
-    if (isBlocked(lookAt.x + dirX * d, lookAt.z + dirZ * d, 0.25)) { freeDist = Math.max(0.6, d - wantDist / STEPS); break; }
-  }
-  camDist = freeDist < camDist ? damp(camDist, freeDist, 25, dt) : damp(camDist, freeDist, 3, dt);
-
-  desired.set(lookAt.x + dirX * camDist, lookAt.y + dirY * camDist, lookAt.z + dirZ * camDist);
-  desired.y = Math.max(desired.y, heightAt(desired.x, desired.z) + 0.35); // stay above ground
-  camera.position.copy(desired);
   camera.lookAt(lookAt);
 
   // Roll: tilt into strafes and slightly into turns
