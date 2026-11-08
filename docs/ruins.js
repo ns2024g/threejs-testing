@@ -4,11 +4,12 @@
 import * as THREE from 'three';
 
 // Materials: each brick gets a base colour with some random variation
-const STONE = [0x57504a, 0x4a4540, 0x5f5851];
-const BRICK = [0x54302a, 0x47302b, 0x5e3a30];
-const PLASTER = [0x5d5549, 0x4f483f, 0x45403a];
-const WOOD = [0x33261d, 0x2a1f18, 0x3a2b20];
-const CHAR = 0x1b1816;   // burnt black
+const STONE = [0x4f524a, 0x43473f, 0x585b50];
+const BRICK = [0x4a3d30, 0x3e362c, 0x524535];
+const PLASTER = [0x565645, 0x4a4b3c, 0x404236];
+const WOOD = [0x2c2a1c, 0x242317, 0x332f20];
+const MOSS = [0x2f4f24, 0x3a5c2a, 0x233f1f];   // patches growing over everything
+const GRIME = 0x161a14;
 
 const UNIT = new THREE.BoxGeometry(1, 1, 1).toNonIndexed();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -53,7 +54,8 @@ export function buildRuins(layout, rng, addSolid, heightAt) {
   const pick = (list) => list[Math.floor(rng() * list.length)];
   const shade = (palette) => {
     const c = new THREE.Color(pick(palette)).multiplyScalar(rand(0.8, 1.15));
-    if (rng() < 0.1) c.lerp(new THREE.Color(CHAR), 0.6);    // scorch marks
+    if (rng() < 0.42) c.lerp(new THREE.Color(pick(MOSS)), rand(0.5, 0.95));   // overgrown with moss
+    else if (rng() < 0.12) c.lerp(new THREE.Color(GRIME), 0.6);               // damp grime
     return c.getHex();
   };
   const euler = (x, y, z) => q.setFromEuler(e.set(x, y, z));
@@ -224,7 +226,7 @@ export function buildRuins(layout, rng, addSolid, heightAt) {
       batch.add(x, y + 0.02, z - 1.2, 0.85, 0.04, 1.8, q, 0x070504);
     } else { // a dirt mound
       euler(0, rand(-0.1, 0.1), 0);
-      batch.add(x, y + 0.08, z - 1.2, 0.8, 0.22, 1.7, q, 0x241a15);
+      batch.add(x, y + 0.08, z - 1.2, 0.8, 0.22, 1.7, q, 0x1f2c17);
     }
   }
   const crypt = { x: g.x, z: g.z, y: heightAt(g.x, g.z), ry: g.cryptRy, w: 5, d: 6, h: 3.4, damage: 0.35 };

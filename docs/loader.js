@@ -6,15 +6,15 @@ const CSS = `
   #loader {
     position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 28px; padding: 0 16px;
-    background: radial-gradient(circle, #140404 0%, #000 65%);
+    background: radial-gradient(circle, #04140a 0%, #000 65%);
     color: #b3b0a8; font-family: Georgia, 'Times New Roman', serif; text-align: center;
     transition: opacity 0.8s ease;
   }
   #loader.done { opacity: 0; pointer-events: none; }
   #loader-text { margin: 0; font-size: clamp(22px, 5vw, 42px); font-weight: normal; letter-spacing: 0.22em; }
   #loader-text:empty { display: none; }
-  #loader-track { width: min(420px, 80vw); height: 3px; background: #1d1212; }
-  #loader-bar { width: 0; height: 100%; background: #9c0f0f; box-shadow: 0 0 10px #c01212; transition: width 0.2s linear; }
+  #loader-track { width: min(420px, 80vw); height: 3px; background: #121d15; }
+  #loader-bar { width: 0; height: 100%; background: #2f8f4a; box-shadow: 0 0 10px #38b85c; transition: width 0.2s linear; }
   #loader-percent { font-size: 13px; letter-spacing: 0.3em; color: #6d6a64; }
 `;
 

@@ -1,5 +1,5 @@
-// Builds the world: a ruined village dragged into hell. Red sky and moon, ash-covered ground,
-// glowing lava cracks, dead trees, and broken buildings (see ruins.js) around a shattered church.
+// Builds the world: a cursed ruined village swallowed by moss. Murky green sky and moon, mossy
+// ground, glowing toxic cracks, dead trees, and broken buildings (see ruins.js) around a church.
 // Everything comes from a fixed seed, so every player sees the exact same map.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -161,16 +161,16 @@ export function createWorld(scene, renderer) {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-  // --- Hell sky ---
-  // A huge red moon hangs low over the church, seen from the spawn point
+  // --- Sky ---
+  // A huge sickly moon hangs low over the church, seen from the spawn point
   const sunDir = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - 20), THREE.MathUtils.degToRad(12));
 
-  const fogColor = new THREE.Color(0x2c0806);        // horizon
-  const skyTop = new THREE.Color(0x070102);
+  const fogColor = new THREE.Color(0x0e2416);        // horizon
+  const skyTop = new THREE.Color(0x020704);
   scene.background = fogColor;
-  scene.fog = new THREE.FogExp2(fogColor, 0.024);    // thick red haze
+  scene.fog = new THREE.FogExp2(fogColor, 0.024);    // thick green haze
 
-  // Faint red ambient light from above, almost nothing from the ground
+  // Faint green ambient light from above, almost nothing from the ground
   const pmrem = new THREE.PMREMGenerator(renderer);
   const envScene = new THREE.Scene();
   envScene.add(new THREE.Mesh(
@@ -178,13 +178,13 @@ export function createWorld(scene, renderer) {
     new THREE.ShaderMaterial({
       side: THREE.BackSide,
       vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: 'varying vec3 vP; void main(){ float h = clamp(vP.y * 0.5 + 0.5, 0.0, 1.0); gl_FragColor = vec4(mix(vec3(0.006, 0.002, 0.002), vec3(0.09, 0.02, 0.015), h * h), 1.0); }',
+      fragmentShader: 'varying vec3 vP; void main(){ float h = clamp(vP.y * 0.5 + 0.5, 0.0, 1.0); gl_FragColor = vec4(mix(vec3(0.002, 0.005, 0.003), vec3(0.02, 0.07, 0.03), h * h), 1.0); }',
     })
   ));
   scene.environment = pmrem.fromScene(envScene).texture;
   scene.environmentIntensity = 1;
 
-  // Sky dome: red at the horizon (matching the fog so there's no visible edge), near black above
+  // Sky dome: green at the horizon (matching the fog so there's no visible edge), near black above
   const domeGeo = new THREE.SphereGeometry(360, 32, 16);
   const domeColors = new Float32Array(domeGeo.attributes.position.count * 3);
   for (let i = 0; i < domeGeo.attributes.position.count; i++) {
@@ -198,21 +198,21 @@ export function createWorld(scene, renderer) {
   dome.frustumCulled = false;
   scene.add(dome);
 
-  // The blood moon, with a soft glow around it
+  // The sickly moon, with a soft glow around it
   const moon = new THREE.Mesh(
     new THREE.SphereGeometry(17, 32, 20),
-    new THREE.MeshBasicMaterial({ color: new THREE.Color(0.8, 0.09, 0.03), fog: false, depthWrite: false, toneMapped: false })
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(0.32, 0.5, 0.2), fog: false, depthWrite: false, toneMapped: false })
   );
   moon.renderOrder = -1;
   scene.add(moon);
   const moonGlow = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: makeGlowTexture(), color: 0xff2a10, blending: THREE.AdditiveBlending, fog: false, depthWrite: false, opacity: 0.8,
+    map: makeGlowTexture(), color: 0x3f8a3a, blending: THREE.AdditiveBlending, fog: false, depthWrite: false, opacity: 0.45,
   }));
   moonGlow.scale.setScalar(190);
   scene.add(moonGlow);
 
-  // Moonlight: dim and red, throwing long shadows from the ruins toward the spawn point
-  const sun = new THREE.DirectionalLight(0xff6448, 1.5);
+  // Moonlight: dim and green, throwing long shadows from the ruins toward the spawn point
+  const sun = new THREE.DirectionalLight(0x8fc48a, 1.2);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   const sc = sun.shadow.camera;
@@ -221,10 +221,10 @@ export function createWorld(scene, renderer) {
   sun.shadow.normalBias = 0.03;
   scene.add(sun, sun.target);
 
-  scene.add(new THREE.HemisphereLight(0x9a3a2a, 0x2a0f0a, 2.2));
+  scene.add(new THREE.HemisphereLight(0x4f8a58, 0x10200f, 2.2));
 
-  // Red glow rising from the altar
-  const altarLight = new THREE.PointLight(0xff3c14, 45, 22, 2);
+  // Green glow rising from the altar
+  const altarLight = new THREE.PointLight(0x3dff78, 45, 22, 2);
   altarLight.position.set(ALTAR.x, CHURCH.y + 2, ALTAR.z);
   scene.add(altarLight);
 
@@ -234,15 +234,15 @@ export function createWorld(scene, renderer) {
   groundGeo.rotateX(-Math.PI / 2);
   const gp = groundGeo.attributes.position;
   const colors = new Float32Array(gp.count * 3);
-  const ash = new THREE.Color(0x3d3631), soot = new THREE.Color(0x1f1b1a), rust = new THREE.Color(0x4f2a1e),
-    scorched = new THREE.Color(0x2b120d), road = new THREE.Color(0x4a3a2e);
+  const moss = new THREE.Color(0x35502a), darkMoss = new THREE.Color(0x18281a), peat = new THREE.Color(0x2c2f1c),
+    deepMoss = new THREE.Color(0x12281a), road = new THREE.Color(0x3b3a29);
   for (let i = 0; i < gp.count; i++) {
     const x = gp.getX(i), z = gp.getZ(i);
     gp.setY(i, heightAt(x, z));
-    tint.copy(soot).lerp(ash, THREE.MathUtils.smoothstep(fbm(x * 0.07 + 40, z * 0.07), 0.3, 0.62));
-    tint.lerp(rust, THREE.MathUtils.smoothstep(fbm(x * 0.04 + 200, z * 0.04 - 90), 0.5, 0.72) * 0.8);
-    // The ground gets more burnt toward the church
-    tint.lerp(scorched, (1 - THREE.MathUtils.smoothstep(Math.hypot(x, z), 14, 42)) * 0.75);
+    tint.copy(darkMoss).lerp(moss, THREE.MathUtils.smoothstep(fbm(x * 0.07 + 40, z * 0.07), 0.3, 0.62));
+    tint.lerp(peat, THREE.MathUtils.smoothstep(fbm(x * 0.04 + 200, z * 0.04 - 90), 0.5, 0.72) * 0.8);
+    // The moss gets darker and thicker toward the church
+    tint.lerp(deepMoss, (1 - THREE.MathUtils.smoothstep(Math.hypot(x, z), 14, 42)) * 0.75);
     // The dirt road from the spawn point to the church door
     if (z < -8 && z > SPAWN.z - 6) tint.lerp(road, (1 - THREE.MathUtils.smoothstep(Math.abs(x + Math.sin(z * 0.25) * 0.6), 1.5, 3.2)) * 0.9);
     colors.set([tint.r, tint.g, tint.b], i * 3);
@@ -287,7 +287,7 @@ export function createWorld(scene, renderer) {
       dummy.scale.setScalar(t.s);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
-      mesh.setColorAt(i, tint.setRGB(0.028 + t.shade * 0.03, 0.021 + t.shade * 0.02, 0.018 + t.shade * 0.015));
+      mesh.setColorAt(i, tint.setRGB(0.022 + t.shade * 0.022, 0.032 + t.shade * 0.04, 0.018 + t.shade * 0.014));
       obstacles.add({ x: t.x, z: t.z, r: 0.2 * t.s });
     });
     mesh.castShadow = mesh.receiveShadow = true;
@@ -311,7 +311,7 @@ export function createWorld(scene, renderer) {
     dummy.scale.set(s * (1 + rng() * 0.5), s * 0.7, s);
     dummy.updateMatrix();
     rocks.setMatrixAt(i, dummy.matrix);
-    tint.setHSL(0.03, 0.12, 0.05 + rng() * 0.05);
+    tint.setHSL(0.27, 0.22, 0.04 + rng() * 0.05);
     rocks.setColorAt(i, tint);
     if (s > 0.6) obstacles.add({ x, z, r: s * 0.9 });
   }
@@ -319,7 +319,7 @@ export function createWorld(scene, renderer) {
   rocks.computeBoundingSphere();
   scene.add(rocks);
 
-  // --- Dead grass ---
+  // --- Wild grass ---
   const blades = [];
   for (let b = 0; b < 6; b++) {
     const blade = new THREE.ConeGeometry(0.025, 0.4, 3, 1, true);
@@ -344,7 +344,7 @@ export function createWorld(scene, renderer) {
     dummy.scale.set(s, s, s);
     dummy.updateMatrix();
     tufts.setMatrixAt(i, dummy.matrix);
-    tint.setHSL(0.06 + rng() * 0.04, 0.4, 0.03 + rng() * 0.03);
+    tint.setHSL(0.26 + rng() * 0.07, 0.5, 0.03 + rng() * 0.035);
     tufts.setColorAt(i, tint);
   }
   tufts.receiveShadow = true;
@@ -401,10 +401,10 @@ export function createWorld(scene, renderer) {
   }
   const lavaGeo = new THREE.BufferGeometry();
   lavaGeo.setAttribute('position', new THREE.Float32BufferAttribute(lavaPos, 3));
-  const lavaMat = new THREE.MeshBasicMaterial({ color: 0xff4a12, side: THREE.DoubleSide, toneMapped: false });
+  const lavaMat = new THREE.MeshBasicMaterial({ color: 0x38d060, side: THREE.DoubleSide, toneMapped: false });
   scene.add(new THREE.Mesh(lavaGeo, lavaMat));
 
-  // --- Embers drifting up around the player ---
+  // --- Glowing spores drifting up around the player ---
   const EMBERS = 350, EMBER_BOX = 26;
   const emberPos = new Float32Array(EMBERS * 3);
   const emberSpeed = new Float32Array(EMBERS);
@@ -415,7 +415,7 @@ export function createWorld(scene, renderer) {
   const emberGeo = new THREE.BufferGeometry();
   emberGeo.setAttribute('position', new THREE.BufferAttribute(emberPos, 3));
   const embers = new THREE.Points(emberGeo, new THREE.PointsMaterial({
-    color: 0xff6a1e, size: 0.07, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false,
+    color: 0x8fe878, size: 0.07, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false,
   }));
   embers.frustumCulled = false;
   scene.add(embers);
@@ -430,9 +430,9 @@ export function createWorld(scene, renderer) {
     moon.position.copy(center).addScaledVector(sunDir, 300);
     moonGlow.position.copy(moon.position);
 
-    // Lava slowly pulses; the altar's light flickers like fire
+    // The cracks slowly pulse; the altar's light flickers
     const pulse = 1 + 0.25 * Math.sin(time * 1.3) + 0.08 * Math.sin(time * 4.1);
-    lavaMat.color.setRGB(0.95 * pulse, 0.13 * pulse, 0.015 * pulse);
+    lavaMat.color.setRGB(0.1 * pulse, 0.62 * pulse, 0.17 * pulse);
     altarLight.intensity = 45 * (0.85 + 0.15 * Math.sin(time * 9) * Math.sin(time * 5.3));
 
     // Embers float upward with a little sideways drift, wrapping around the player
