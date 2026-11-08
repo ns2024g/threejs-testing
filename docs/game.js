@@ -12,7 +12,7 @@ const { loadCharacters, createCharacter } = await import(`./character.js${VERSIO
 
 // ---------- Movement settings (real-world values) ----------
 const WALK_SPEED = 1.6;        // m/s — a normal human walk
-const RUN_SPEED = 3.4;         // m/s — an easy jog (hold Shift)
+const RUN_SPEED = 5.5;         // m/s — a proper run (hold Shift)
 const ACCELERATION = 6;        // how quickly you reach full speed (higher = snappier)
 const DECELERATION = 8;        // how quickly you come to a stop
 const TURN_SPEED = 9;          // how quickly the body turns to face the movement direction
@@ -21,8 +21,8 @@ const LIMIT = HALF - 1;        // edge of the walkable area
 
 // ---------- Camera settings ----------
 const EYE_HEIGHT = 0.12;       // eyes are this far above the base of the neck (about 1.69 m tall)
-const CAM_FOV = 10;
-const CAM_RUN_FOV = 11;        // field of view widens a little at a run
+const CAM_FOV = 25;
+const CAM_RUN_FOV = 35;        // field of view widens at a run
 const CAM_FOLLOW = 30;         // how tightly the view follows the head side to side
 const CAM_FOLLOW_Y = 12;       // vertical follow — softer, so it absorbs some of the bounce
 const CAM_STEP_KICK = 0.012;   // how hard each footstep jolts the camera
