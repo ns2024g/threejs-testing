@@ -95,6 +95,11 @@ export function collide(pos, radius) {
   }
 }
 
+/** Adds a solid circle that players bump into and the camera avoids. */
+export function addObstacle(x, z, r) {
+  obstacles.add({ x, z, r });
+}
+
 /** True if a circle of `radius` at (x, z) overlaps a tree or big rock. */
 export function isBlocked(x, z, radius) {
   for (const o of obstacles.near(x, z)) {

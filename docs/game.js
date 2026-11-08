@@ -4,7 +4,8 @@ import { joinRoom, selfId } from 'trystero';
 // Load our other files with the same version tag this file was loaded with (see index.html),
 // so an update never mixes new and old cached files.
 const VERSION = new URL(import.meta.url).search;
-const { createWorld, heightAt, collide, isBlocked, HALF } = await import(`./world.js${VERSION}`);
+const { createWorld, heightAt, collide, isBlocked, addObstacle, HALF } = await import(`./world.js${VERSION}`);
+const { createCreature1 } = await import(`./creature1.js${VERSION}`);
 const { loadCharacters, createCharacter } = await import(`./character.js${VERSION}`);
 
 // ---------- Movement settings (real-world values) ----------
@@ -83,6 +84,20 @@ const myColor = `hsl(${Math.floor(Math.random() * 360)}, 45%, 42%)`;
 const me = addPlayer(selfId, { x: (Math.random() - 0.5) * 8, z: (Math.random() - 0.5) * 8, ry: 0, color: myColor });
 const mePos = me.model.root.position;
 const velocity = new THREE.Vector3();
+
+// ---------- Creature 1 ----------
+// Stands at the far side of the spawn clearing, facing the players. Building its body
+// freezes the page for a few seconds, so it happens here, before players connect.
+const CREATURE_POS = { x: 0, z: 7 };
+document.getElementById('status').textContent = 'Building the creature…';
+await new Promise((resolve) => setTimeout(resolve, 50)); // let the message appear first
+const creature = createCreature1();
+creature.object.position.set(CREATURE_POS.x, heightAt(CREATURE_POS.x, CREATURE_POS.z), CREATURE_POS.z);
+creature.object.rotation.y = Math.PI;       // the model faces +Z; turn it toward the spawn point
+scene.add(creature.object);
+addObstacle(CREATURE_POS.x, CREATURE_POS.z, 0.35);
+creature.watch(me.model.chest);             // head and eyes follow your character
+window.game.creature = creature;            // try game.creature.scream() in the browser console
 
 // ---------- Light carried by the player ----------
 // A soft warm glow all around, plus a wider, brighter wash reaching out ahead
@@ -270,6 +285,7 @@ function animate() {
     p.model.animate(dt, p.speed < 0.1 ? 0 : p.speed, angleDiff(before, p.model.root.rotation.y) / Math.max(dt, 1e-4), 0);
   }
 
+  creature.update(dt);
   updateCamera(dt);
   updatePlayerLight(dt);
   world.update(mePos);
