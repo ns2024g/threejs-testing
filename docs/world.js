@@ -1,5 +1,5 @@
-// Builds the world: a cursed ruined village swallowed by moss. Murky green sky and moon, mossy
-// ground, glowing toxic cracks, dead trees, and broken buildings (see ruins.js) around a church.
+// Builds the world: a ruined village swallowed by a dark, mossy forest. Murky haze, mossy ground,
+// bare trees, and broken buildings (see ruins.js) around a shattered church.
 // Everything comes from a fixed seed, so every player sees the exact same map.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -165,10 +165,10 @@ export function createWorld(scene, renderer) {
   // A huge sickly moon hangs low over the church, seen from the spawn point
   const sunDir = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - 20), THREE.MathUtils.degToRad(12));
 
-  const fogColor = new THREE.Color(0x0e2416);        // horizon
-  const skyTop = new THREE.Color(0x020704);
+  const fogColor = new THREE.Color(0x16251b);        // horizon
+  const skyTop = new THREE.Color(0x020403);
   scene.background = fogColor;
-  scene.fog = new THREE.FogExp2(fogColor, 0.024);    // thick green haze
+  scene.fog = new THREE.FogExp2(fogColor, 0.024);    // thick murky haze
 
   // Faint green ambient light from above, almost nothing from the ground
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -178,7 +178,7 @@ export function createWorld(scene, renderer) {
     new THREE.ShaderMaterial({
       side: THREE.BackSide,
       vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: 'varying vec3 vP; void main(){ float h = clamp(vP.y * 0.5 + 0.5, 0.0, 1.0); gl_FragColor = vec4(mix(vec3(0.002, 0.005, 0.003), vec3(0.02, 0.07, 0.03), h * h), 1.0); }',
+      fragmentShader: 'varying vec3 vP; void main(){ float h = clamp(vP.y * 0.5 + 0.5, 0.0, 1.0); gl_FragColor = vec4(mix(vec3(0.002, 0.005, 0.003), vec3(0.018, 0.035, 0.022), h * h), 1.0); }',
     })
   ));
   scene.environment = pmrem.fromScene(envScene).texture;
@@ -201,18 +201,18 @@ export function createWorld(scene, renderer) {
   // The sickly moon, with a soft glow around it
   const moon = new THREE.Mesh(
     new THREE.SphereGeometry(17, 32, 20),
-    new THREE.MeshBasicMaterial({ color: new THREE.Color(0.32, 0.5, 0.2), fog: false, depthWrite: false, toneMapped: false })
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(0.075, 0.095, 0.07), fog: false, depthWrite: false, toneMapped: false })
   );
   moon.renderOrder = -1;
   scene.add(moon);
   const moonGlow = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: makeGlowTexture(), color: 0x3f8a3a, blending: THREE.AdditiveBlending, fog: false, depthWrite: false, opacity: 0.45,
+    map: makeGlowTexture(), color: 0x26362a, blending: THREE.AdditiveBlending, fog: false, depthWrite: false, opacity: 0.3,
   }));
   moonGlow.scale.setScalar(190);
   scene.add(moonGlow);
 
   // Moonlight: dim and green, throwing long shadows from the ruins toward the spawn point
-  const sun = new THREE.DirectionalLight(0x8fc48a, 1.2);
+  const sun = new THREE.DirectionalLight(0x9db89a, 1.3);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   const sc = sun.shadow.camera;
@@ -221,12 +221,7 @@ export function createWorld(scene, renderer) {
   sun.shadow.normalBias = 0.03;
   scene.add(sun, sun.target);
 
-  scene.add(new THREE.HemisphereLight(0x4f8a58, 0x10200f, 2.2));
-
-  // Green glow rising from the altar
-  const altarLight = new THREE.PointLight(0x3dff78, 45, 22, 2);
-  altarLight.position.set(ALTAR.x, CHURCH.y + 2, ALTAR.z);
-  scene.add(altarLight);
+  scene.add(new THREE.HemisphereLight(0x5f8a64, 0x1a2616, 3.6));
 
   // --- Ground ---
   const groundSize = FOREST_EDGE * 2 + 20;
@@ -234,8 +229,8 @@ export function createWorld(scene, renderer) {
   groundGeo.rotateX(-Math.PI / 2);
   const gp = groundGeo.attributes.position;
   const colors = new Float32Array(gp.count * 3);
-  const moss = new THREE.Color(0x35502a), darkMoss = new THREE.Color(0x18281a), peat = new THREE.Color(0x2c2f1c),
-    deepMoss = new THREE.Color(0x12281a), road = new THREE.Color(0x3b3a29);
+  const moss = new THREE.Color(0x3a5a28), darkMoss = new THREE.Color(0x1d2e19), peat = new THREE.Color(0x2c2f1c),
+    deepMoss = new THREE.Color(0x1a2e18), road = new THREE.Color(0x3b3a29);
   for (let i = 0; i < gp.count; i++) {
     const x = gp.getX(i), z = gp.getZ(i);
     gp.setY(i, heightAt(x, z));
@@ -265,14 +260,14 @@ export function createWorld(scene, renderer) {
   // --- Dead trees ---
   const trees = [];
   const spacing = new Grid(4);
-  for (let tries = 0; trees.length < 750 && tries < 30000; tries++) {
+  for (let tries = 0; trees.length < 950 && tries < 30000; tries++) {
     const x = (rng() * 2 - 1) * FOREST_EDGE;
     const z = (rng() * 2 - 1) * FOREST_EDGE;
     if (insidePad(x, z, 1.5)) continue;
     if (Math.abs(x) < 6 && z < 0 && z > SPAWN.z) continue;                      // keep the road clear
     // Sparse in the village, thick dead forest around the outside
     const dist = Math.hypot(x, z);
-    if (rng() > THREE.MathUtils.lerp(0.14, 1, THREE.MathUtils.smoothstep(dist, 55, 90))) continue;
+    if (rng() > THREE.MathUtils.lerp(0.32, 1, THREE.MathUtils.smoothstep(dist, 55, 90))) continue;
     if (spacing.near(x, z).some((t) => Math.hypot(t.x - x, t.z - z) < 3)) continue;
     const t = { x, z, s: 0.8 + rng() * 0.9, ry: rng() * Math.PI * 2, shade: rng(), kind: rng() < 0.5 ? 0 : 1 };
     spacing.add(t);
@@ -344,107 +339,20 @@ export function createWorld(scene, renderer) {
     dummy.scale.set(s, s, s);
     dummy.updateMatrix();
     tufts.setMatrixAt(i, dummy.matrix);
-    tint.setHSL(0.26 + rng() * 0.07, 0.5, 0.03 + rng() * 0.035);
+    tint.setHSL(0.26 + rng() * 0.06, 0.42, 0.03 + rng() * 0.03);
     tufts.setColorAt(i, tint);
   }
   tufts.receiveShadow = true;
   tufts.computeBoundingSphere();
   scene.add(tufts);
 
-  // --- Glowing lava cracks + the ritual circle around the altar ---
-  const lavaPos = [];
-  // A glowing strip along the ground through the given points. Tapered strips narrow to a
-  // point at both ends, like a crack.
-  function lavaStrip(points, width, tapered = true) {
-    const widthAt = (i) => (tapered ? width * Math.sin(Math.PI * i / (points.length - 1)) + 0.012 : width);
-    for (let i = 0; i < points.length - 1; i++) {
-      const [ax, az] = points[i], [bx, bz] = points[i + 1];
-      const len = Math.hypot(bx - ax, bz - az) || 1;
-      const nx = -(bz - az) / len, nz = (bx - ax) / len;
-      const w0 = widthAt(i), w1 = widthAt(i + 1);
-      const a0 = [ax + nx * w0, az + nz * w0], a1 = [ax - nx * w0, az - nz * w0];
-      const b0 = [bx + nx * w1, bz + nz * w1], b1 = [bx - nx * w1, bz - nz * w1];
-      for (const [x, z] of [a0, a1, b0, b0, a1, b1]) lavaPos.push(x, heightAt(x, z) + 0.06, z);
-    }
-  }
-  const CRACKS = 110;
-  for (let c = 0; c < CRACKS; c++) {
-    // Most cracks spread out from the church, the rest are scattered around the village
-    const near = c < 75;
-    const angle = rng() * Math.PI * 2, dist = near ? 3 + Math.pow(rng(), 0.7) * 34 : 30 + rng() * 55;
-    let x = Math.sin(angle) * dist, z = Math.cos(angle) * dist;
-    let dir = near ? angle + (rng() - 0.5) * 1.2 : rng() * Math.PI * 2;
-    const pts = [[x, z]];
-    const segs = 5 + Math.floor(rng() * 8);
-    for (let s = 0; s < segs; s++) {
-      dir += (rng() - 0.5) * 1.3;
-      const step = 0.6 + rng() * 1.1;
-      x += Math.sin(dir) * step;
-      z += Math.cos(dir) * step;
-      pts.push([x, z]);
-    }
-    lavaStrip(pts, 0.025 + rng() * 0.065);
-  }
-  // Ritual circle: a ring and a five-pointed star on the church floor around the altar
-  {
-    const R = 3.1, ring = [], star = [];
-    for (let i = 0; i <= 48; i++) {
-      const a = (i / 48) * Math.PI * 2;
-      ring.push([ALTAR.x + Math.sin(a) * R, ALTAR.z + Math.cos(a) * R]);
-    }
-    lavaStrip(ring, 0.05, false);
-    for (let i = 0; i < 5; i++) {
-      const a = (i * 2 / 5) * Math.PI * 2 + Math.PI;
-      star.push([ALTAR.x + Math.sin(a) * R, ALTAR.z + Math.cos(a) * R]);
-    }
-    for (let i = 0; i < 5; i++) lavaStrip([star[i], star[(i + 1) % 5]], 0.05, false);
-  }
-  const lavaGeo = new THREE.BufferGeometry();
-  lavaGeo.setAttribute('position', new THREE.Float32BufferAttribute(lavaPos, 3));
-  const lavaMat = new THREE.MeshBasicMaterial({ color: 0x38d060, side: THREE.DoubleSide, toneMapped: false });
-  scene.add(new THREE.Mesh(lavaGeo, lavaMat));
-
-  // --- Glowing spores drifting up around the player ---
-  const EMBERS = 350, EMBER_BOX = 26;
-  const emberPos = new Float32Array(EMBERS * 3);
-  const emberSpeed = new Float32Array(EMBERS);
-  for (let i = 0; i < EMBERS; i++) {
-    emberPos.set([(Math.random() - 0.5) * EMBER_BOX * 2, Math.random() * 16, (Math.random() - 0.5) * EMBER_BOX * 2], i * 3);
-    emberSpeed[i] = 0.35 + Math.random() * 0.9;
-  }
-  const emberGeo = new THREE.BufferGeometry();
-  emberGeo.setAttribute('position', new THREE.BufferAttribute(emberPos, 3));
-  const embers = new THREE.Points(emberGeo, new THREE.PointsMaterial({
-    color: 0x8fe878, size: 0.07, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false,
-  }));
-  embers.frustumCulled = false;
-  scene.add(embers);
-
-  let time = 0;
-  // Keeps the sky and moonlight centred on the player, and animates the fire effects
-  function update(center, dt = 0) {
-    time += dt;
+  // Keeps the sky and moonlight centred on the player
+  function update(center) {
     sun.position.copy(center).addScaledVector(sunDir, 80);
     sun.target.position.copy(center);
     dome.position.copy(center);
     moon.position.copy(center).addScaledVector(sunDir, 300);
     moonGlow.position.copy(moon.position);
-
-    // The cracks slowly pulse; the altar's light flickers
-    const pulse = 1 + 0.25 * Math.sin(time * 1.3) + 0.08 * Math.sin(time * 4.1);
-    lavaMat.color.setRGB(0.1 * pulse, 0.62 * pulse, 0.17 * pulse);
-    altarLight.intensity = 45 * (0.85 + 0.15 * Math.sin(time * 9) * Math.sin(time * 5.3));
-
-    // Embers float upward with a little sideways drift, wrapping around the player
-    for (let i = 0; i < EMBERS; i++) {
-      const s = emberSpeed[i];
-      emberPos[i * 3] += Math.sin(time * s + i) * 0.25 * dt;
-      emberPos[i * 3 + 1] += s * dt;
-      emberPos[i * 3 + 2] += Math.cos(time * s * 0.8 + i) * 0.25 * dt;
-      if (emberPos[i * 3 + 1] > 16) emberPos[i * 3 + 1] = 0;
-    }
-    emberGeo.attributes.position.needsUpdate = true;
-    embers.position.copy(center);
   }
 
   return { update };

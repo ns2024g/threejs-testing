@@ -8,7 +8,7 @@ const STONE = [0x4f524a, 0x43473f, 0x585b50];
 const BRICK = [0x4a3d30, 0x3e362c, 0x524535];
 const PLASTER = [0x565645, 0x4a4b3c, 0x404236];
 const WOOD = [0x2c2a1c, 0x242317, 0x332f20];
-const MOSS = [0x2f4f24, 0x3a5c2a, 0x233f1f];   // patches growing over everything
+const MOSS = [0x2f4a24, 0x38552a, 0x233a1f];   // patches growing over everything
 const GRIME = 0x161a14;
 
 const UNIT = new THREE.BoxGeometry(1, 1, 1).toNonIndexed();

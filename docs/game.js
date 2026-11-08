@@ -303,7 +303,7 @@ function animate() {
   creature.update(dt);
   updateCamera(dt);
   updatePlayerLight(dt);
-  world.update(mePos, dt);
+  world.update(mePos);
   renderer.render(scene, camera);
   requestAnimationFrame(animate);
 }
