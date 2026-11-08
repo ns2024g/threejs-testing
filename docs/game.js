@@ -22,7 +22,9 @@ const LIMIT = HALF - 1;        // edge of the walkable area
 // ---------- Camera settings ----------
 const EYE_HEIGHT = 0.12;       // eyes are this far above the base of the neck (about 1.69 m tall)
 const CAM_FOV = 45;
-const CAM_RUN_FOV = 115;       // field of view widens at a run
+const CAM_RUN_FOV = 95;        // field of view widens at a run
+const CAM_RUN_SHAKE = 0.007;   // how hard the view shakes while running (radians)
+const RUN_VIGNETTE = 0.55;     // how dark the screen edges get while running (0..1)
 const CAM_FOLLOW = 30;         // how tightly the view follows the head side to side
 const CAM_FOLLOW_Y = 12;       // vertical follow — softer, so it absorbs some of the bounce
 const CAM_STEP_KICK = 0.012;   // how hard each footstep jolts the camera
@@ -183,6 +185,13 @@ addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// Darkens the screen edges while running
+const vignette = document.createElement('div');
+vignette.style.cssText = 'position:fixed;inset:0;pointer-events:none;opacity:0;'
+  + `background:radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,${RUN_VIGNETTE}) 100%);`;
+document.body.appendChild(vignette);
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 // ---------- Camera rig state ----------
 const camAnchor = new THREE.Vector3();   // smoothed point the camera follows (the head)
 const headPos = new THREE.Vector3();
@@ -331,6 +340,15 @@ function updateCamera(dt) {
   camera.rotateZ(camRoll);
   camera.rotateX(driftY);
   camera.rotateY(driftX);
+
+  // Running: fast rough shake (layered quick waves that never quite repeat) and darker edges
+  if (!reducedMotion && runAmount > 0.01) {
+    const s = CAM_RUN_SHAKE * runAmount;
+    camera.rotateX((Math.sin(time * 19) + Math.sin(time * 31 + 1.7) * 0.6) * s);
+    camera.rotateY((Math.sin(time * 16 + 0.9) + Math.sin(time * 27 + 2.3) * 0.6) * s);
+    camera.rotateZ((Math.sin(time * 13 + 2.1) + Math.sin(time * 23) * 0.5) * s * 0.7);
+  }
+  vignette.style.opacity = runAmount.toFixed(3);
 
   // Field of view widens a touch when running
   const fov = THREE.MathUtils.lerp(CAM_FOV, CAM_RUN_FOV, runAmount);
