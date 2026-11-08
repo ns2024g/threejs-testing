@@ -165,10 +165,10 @@ export function createWorld(scene, renderer) {
   // A huge sickly moon hangs low over the church, seen from the spawn point
   const sunDir = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - 20), THREE.MathUtils.degToRad(12));
 
-  const fogColor = new THREE.Color(0x16251b);        // horizon
+  const fogColor = new THREE.Color(0x09110c);        // horizon
   const skyTop = new THREE.Color(0x020403);
   scene.background = fogColor;
-  scene.fog = new THREE.FogExp2(fogColor, 0.024);    // thick murky haze
+  scene.fog = new THREE.FogExp2(fogColor, 0.032);    // thick murky haze
 
   // Faint green ambient light from above, almost nothing from the ground
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -182,7 +182,7 @@ export function createWorld(scene, renderer) {
     })
   ));
   scene.environment = pmrem.fromScene(envScene).texture;
-  scene.environmentIntensity = 1;
+  scene.environmentIntensity = 0.4;
 
   // Sky dome: green at the horizon (matching the fog so there's no visible edge), near black above
   const domeGeo = new THREE.SphereGeometry(360, 32, 16);
@@ -201,18 +201,18 @@ export function createWorld(scene, renderer) {
   // The sickly moon, with a soft glow around it
   const moon = new THREE.Mesh(
     new THREE.SphereGeometry(17, 32, 20),
-    new THREE.MeshBasicMaterial({ color: new THREE.Color(0.075, 0.095, 0.07), fog: false, depthWrite: false, toneMapped: false })
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(0.035, 0.045, 0.035), fog: false, depthWrite: false, toneMapped: false })
   );
   moon.renderOrder = -1;
   scene.add(moon);
   const moonGlow = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: makeGlowTexture(), color: 0x26362a, blending: THREE.AdditiveBlending, fog: false, depthWrite: false, opacity: 0.3,
+    map: makeGlowTexture(), color: 0x26362a, blending: THREE.AdditiveBlending, fog: false, depthWrite: false, opacity: 0.1,
   }));
   moonGlow.scale.setScalar(190);
   scene.add(moonGlow);
 
   // Moonlight: dim and green, throwing long shadows from the ruins toward the spawn point
-  const sun = new THREE.DirectionalLight(0x9db89a, 1.3);
+  const sun = new THREE.DirectionalLight(0xa9c2a4, 1.6);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   const sc = sun.shadow.camera;
@@ -221,7 +221,7 @@ export function createWorld(scene, renderer) {
   sun.shadow.normalBias = 0.03;
   scene.add(sun, sun.target);
 
-  scene.add(new THREE.HemisphereLight(0x5f8a64, 0x1a2616, 3.6));
+  scene.add(new THREE.HemisphereLight(0x3a5640, 0x0a0f09, 0.75));
 
   // --- Ground ---
   const groundSize = FOREST_EDGE * 2 + 20;

@@ -109,7 +109,7 @@ window.game.creature = creature;            // try game.creature.scream() in the
 // ---------- Light carried by the player ----------
 // A soft warm glow all around, plus a wider, brighter wash reaching out ahead
 // (like a lantern held in front). Settings are at the top of this section.
-const GLOW_INTENSITY = 5;      // soft light around the player
+const GLOW_INTENSITY = 1.5;      // soft light around the player
 const GLOW_RANGE = 10;
 const AHEAD_INTENSITY = 70;    // extra light in front
 const AHEAD_RANGE = 24;
