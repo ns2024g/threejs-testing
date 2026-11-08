@@ -12,6 +12,26 @@
       background: rgba(0, 0, 0, 0.45); padding: 8px 12px; border-radius: 6px;
       font-size: 14px; line-height: 1.5; pointer-events: none;
     }
+    #loader {
+      position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 28px; padding: 0 16px;
+      background: radial-gradient(circle, #140404 0%, #000 65%);
+      color: #b3b0a8; font-family: Georgia, 'Times New Roman', serif; text-align: center;
+      transition: opacity 0.8s ease;
+    }
+    #loader.done { opacity: 0; pointer-events: none; }
+    #loader-text {
+      margin: 0; font-size: clamp(22px, 5vw, 42px); font-weight: normal; letter-spacing: 0.22em;
+      animation: flicker 3.7s infinite;
+    }
+    #loader-track { width: min(420px, 80vw); height: 3px; background: #1d1212; }
+    #loader-bar { width: 0; height: 100%; background: #9c0f0f; box-shadow: 0 0 10px #c01212; transition: width 0.2s linear; }
+    #loader-percent { font-size: 13px; letter-spacing: 0.3em; color: #6d6a64; }
+    @keyframes flicker {
+      0%, 7%, 9%, 46%, 49%, 52%, 83%, 100% { opacity: 0.9; }
+      8%, 47%, 51%, 84% { opacity: 0.12; }
+    }
+    @media (prefers-reduced-motion: reduce) { #loader-text { animation: none; } }
   </style>
   <script type="importmap">
     {
@@ -24,6 +44,11 @@
   </script>
 </head>
 <body>
+  <div id="loader">
+    <h1 id="loader-text">IT KNOWS YOU'RE HERE</h1>
+    <div id="loader-track"><div id="loader-bar"></div></div>
+    <div id="loader-percent">0%</div>
+  </div>
   <div id="hud">
     <div id="status">Connecting…</div>
     <div>Click to look around · WASD to move · Shift to run · Esc to free mouse</div>
@@ -36,7 +61,13 @@
       const res = await fetch('version.txt', { cache: 'no-store' });
       if (res.ok) v = (await res.text()).trim();
     } catch {}
-    await import(`./game.js?v=${encodeURIComponent(v)}`);
+    try {
+      await import(`./game.js?v=${encodeURIComponent(v)}`);
+    } catch (err) {
+      console.error(err);
+      document.getElementById('loader-text').textContent = 'FAILED TO LOAD';
+      document.getElementById('loader-percent').textContent = 'REFRESH THE PAGE';
+    }
   </script>
 </body>
 </html>

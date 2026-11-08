@@ -5,8 +5,19 @@ import { joinRoom, selfId } from 'trystero';
 // so an update never mixes new and old cached files.
 const VERSION = new URL(import.meta.url).search;
 const { createWorld, heightAt, collide, isBlocked, addObstacle, HALF } = await import(`./world.js${VERSION}`);
-const { createCreature1 } = await import(`./creature1.js${VERSION}`);
+const { createCreature1, loadCreature1Geometry } = await import(`./creature1.js${VERSION}`);
 const { loadCharacters, createCharacter } = await import(`./character.js${VERSION}`);
+
+// ---------- Loading screen ----------
+const loaderEl = document.getElementById('loader');
+const loaderBar = document.getElementById('loader-bar');
+const loaderPercent = document.getElementById('loader-percent');
+function setLoading(fraction) {
+  const percent = Math.round(fraction * 100);
+  loaderBar.style.width = `${percent}%`;
+  loaderPercent.textContent = `${percent}%`;
+}
+setLoading(0.1);
 
 // ---------- Movement settings (real-world values) ----------
 const WALK_SPEED = 1.6;        // m/s — a normal human walk
@@ -47,8 +58,8 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(CAM_FOV, window.innerWidth / window.innerHeight, 0.05, 400);
 const world = createWorld(scene, renderer);
-document.getElementById('status').textContent = 'Loading characters…';
 await loadCharacters();
+setLoading(0.2);
 window.game = { renderer, scene, camera }; // handy for debugging in the browser console
 
 const damp = (cur, target, rate, dt) => cur + (target - cur) * (1 - Math.exp(-rate * dt));
@@ -86,12 +97,11 @@ const mePos = me.model.root.position;
 const velocity = new THREE.Vector3();
 
 // ---------- Creature 1 ----------
-// Stands at the far side of the spawn clearing, facing the players. Building its body
-// freezes the page for a few seconds, so it happens here, before players connect.
+// Stands at the far side of the spawn clearing, facing the players. Its body is sculpted
+// in a background thread, which is most of the loading bar.
 const CREATURE_POS = { x: 0, z: 7 };
-document.getElementById('status').textContent = 'Building the creature…';
-await new Promise((resolve) => setTimeout(resolve, 50)); // let the message appear first
-const creature = createCreature1();
+const creatureGeometry = await loadCreature1Geometry((f) => setLoading(0.2 + f * 0.7));
+const creature = createCreature1({ geometry: creatureGeometry });
 creature.object.position.set(CREATURE_POS.x, heightAt(CREATURE_POS.x, CREATURE_POS.z), CREATURE_POS.z);
 creature.object.rotation.y = Math.PI;       // the model faces +Z; turn it toward the spawn point
 scene.add(creature.object);
@@ -356,4 +366,12 @@ function updateCamera(dt) {
   }
 }
 
+// ---------- Start ----------
+// Prepare the graphics before revealing the game, so the first frame doesn't stutter
+setLoading(0.9);
+await renderer.compileAsync(scene, camera);
+setLoading(1);
+loaderEl.classList.add('done');
+setTimeout(() => loaderEl.remove(), 900);
+clock.getDelta(); // don't count the loading time as the first frame
 animate();
