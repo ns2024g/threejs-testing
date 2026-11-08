@@ -6,7 +6,7 @@ import { joinRoom, selfId } from 'trystero';
 const VERSION = new URL(import.meta.url).search;
 const { setLoading, finishLoading } = await import(`./loader.js${VERSION}`);
 setLoading(0.1);
-const { createWorld, heightAt, collide, addObstacle, HALF } = await import(`./world.js${VERSION}`);
+const { createWorld, heightAt, collide, addObstacle, HALF, SPAWN } = await import(`./world.js${VERSION}`);
 const { createCreature1, loadCreature1Geometry } = await import(`./creature1.js${VERSION}`);
 const { loadCharacters, createCharacter } = await import(`./character.js${VERSION}`);
 
@@ -80,17 +80,23 @@ function removePlayer(id) {
   delete players[id];
 }
 
-// Our own player: a random muted shirt colour, spawned in the clearing
+// Our own player: a random muted colour, spawned at the end of the road
 const myColor = `hsl(${Math.floor(Math.random() * 360)}, 45%, 42%)`;
-const me = addPlayer(selfId, { x: (Math.random() - 0.5) * 8, z: (Math.random() - 0.5) * 8, ry: 0, color: myColor });
+const me = addPlayer(selfId, { x: SPAWN.x + (Math.random() - 0.5) * 8, z: SPAWN.z + (Math.random() - 0.5) * 6, ry: 0, color: myColor });
 const mePos = me.model.root.position;
 const velocity = new THREE.Vector3();
 me.model.hideFromView();   // first person: you don't see your own body, only its shadow
+// Debug helpers for the browser console: move yourself and turn your view
+Object.assign(window.game, {
+  mePos,
+  teleport(x, z) { mePos.set(x, heightAt(x, z), z); anchorReady = false; },
+  look(newYaw, newPitch = 0) { targetYaw = yaw = newYaw; targetPitch = pitch = newPitch; },
+});
 
 // ---------- Creature 1 ----------
-// Stands at the far side of the spawn clearing, facing the players. Its body is sculpted
+// Stands on the road just ahead of the spawn point, facing the players. Its body is sculpted
 // in a background thread, which is most of the loading bar.
-const CREATURE_POS = { x: 0, z: 7 };
+const CREATURE_POS = { x: SPAWN.x, z: SPAWN.z + 8 };
 const creatureGeometry = await loadCreature1Geometry((f) => setLoading(0.2 + f * 0.7));
 const creature = createCreature1({ geometry: creatureGeometry });
 creature.object.position.set(CREATURE_POS.x, heightAt(CREATURE_POS.x, CREATURE_POS.z), CREATURE_POS.z);
@@ -297,7 +303,7 @@ function animate() {
   creature.update(dt);
   updateCamera(dt);
   updatePlayerLight(dt);
-  world.update(mePos);
+  world.update(mePos, dt);
   renderer.render(scene, camera);
   requestAnimationFrame(animate);
 }
