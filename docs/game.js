@@ -21,8 +21,8 @@ const LIMIT = HALF - 1;        // edge of the walkable area
 
 // ---------- Camera settings ----------
 const EYE_HEIGHT = 0.12;       // eyes are this far above the base of the neck (about 1.69 m tall)
-const CAM_FOV = 75;
-const CAM_RUN_FOV = 80;        // field of view widens a little at a run
+const CAM_FOV = 62;
+const CAM_RUN_FOV = 66;        // field of view widens a little at a run
 const CAM_FOLLOW = 30;         // how tightly the view follows the head side to side
 const CAM_FOLLOW_Y = 12;       // vertical follow — softer, so it absorbs some of the bounce
 const CAM_STEP_KICK = 0.012;   // how hard each footstep jolts the camera
