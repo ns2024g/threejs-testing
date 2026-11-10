@@ -5,7 +5,8 @@ import { joinRoom, selfId } from 'trystero';
 // so an update never mixes new and old cached files.
 const VERSION = new URL(import.meta.url).search;
 const { setLoading, finishLoading } = await import(`./loader.js${VERSION}`);
-const { startAnalogOverlay } = await import(`./analog.js${VERSION}`);
+const { enableVertexSnapping, createLofiRenderer } = await import(`./lofi.js${VERSION}`);
+enableVertexSnapping(); // must happen before anything is drawn
 setLoading(0.1);
 const { createWorld, heightAt, collide, addObstacle, HALF, SPAWN } = await import(`./world.js${VERSION}`);
 const { createCreature1, loadCreature1Geometry } = await import(`./creature1.js${VERSION}`);
@@ -44,7 +45,7 @@ const ROOM_ID = 'forest';                 // ends up in the same world
 const renderer = new THREE.WebGLRenderer({ antialias: false });
 // Low-quality look: the game is drawn only RES_LINES pixels tall and blown up with hard,
 // blocky pixels to fill the screen. Lower = crunchier.
-const RES_LINES = 360;
+const RES_LINES = 240;
 // "Reverse stretched res": the whole picture is squished slightly sideways while still filling
 // the screen, so everything looks a little thinner and taller. 1 = normal, lower = more squished.
 const SQUISH = 0.93;
@@ -55,6 +56,11 @@ function applyResolution() {
 }
 applyResolution();
 renderer.domElement.style.imageRendering = 'pixelated'; // hard pixels instead of a soft blur
+// On-screen text styled like an old game's, instead of a modern font in a box
+Object.assign(document.getElementById('hud').style, {
+  background: 'none', padding: '0', fontFamily: '"Courier New", Courier, monospace', fontSize: '12px',
+  letterSpacing: '0.08em', textTransform: 'uppercase', color: '#cfd2c4', textShadow: '1px 1px 0 #000', opacity: '0.85',
+});
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -63,6 +69,7 @@ const camera = new THREE.PerspectiveCamera(CAM_FOV, viewAspect(), 0.05, 400);
 const world = createWorld(scene, renderer);
 await loadCharacters();
 setLoading(0.2);
+const lofi = createLofiRenderer(renderer);   // the low-fi look (see lofi.js)
 window.game = { renderer, scene, camera }; // handy for debugging in the browser console
 
 const damp = (cur, target, rate, dt) => cur + (target - cur) * (1 - Math.exp(-rate * dt));
@@ -317,7 +324,7 @@ function animate() {
   updateCamera(dt);
   updatePlayerLight(dt);
   world.update(mePos);
-  renderer.render(scene, camera);
+  lofi.render(scene, camera, time);
   requestAnimationFrame(animate);
 }
 
@@ -380,8 +387,9 @@ function updateCamera(dt) {
 // ---------- Start ----------
 // Prepare the graphics before revealing the game, so the first frame doesn't stutter
 setLoading(0.9);
-await renderer.compileAsync(scene, camera);
+await lofi.compile(scene, camera);
 finishLoading();
-startAnalogOverlay();
 clock.getDelta(); // don't count the loading time as the first frame
+// Debug helper: draw one frame by hand (useful when the page isn't animating)
+window.game.frame = () => { updateCamera(1 / 60); updatePlayerLight(1 / 60); world.update(mePos); lofi.render(scene, camera, time); };
 animate();
