@@ -45,10 +45,9 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 // Low, VHS-like resolution: the game is drawn about VHS_LINES pixels tall and stretched
 // smoothly to fill the screen, which gives it a soft, slightly squished tape look.
 const VHS_LINES = 480;
-// "Reverse stretched res": the whole picture is squished sideways while still filling the
-// screen, so everything looks thinner and taller. 1 = normal; 3 / 3.5 squeezes a 4:3.5
-// image's worth of width into 4:3, like you asked.
-const SQUISH = 3 / 3.5;
+// "Reverse stretched res": the whole picture is squished slightly sideways while still filling
+// the screen, so everything looks a little thinner and taller. 1 = normal, lower = more squished.
+const SQUISH = 0.93;
 const viewAspect = () => (window.innerWidth / window.innerHeight) / SQUISH;
 function applyResolution() {
   renderer.setPixelRatio(Math.min(1, VHS_LINES / window.innerHeight));
