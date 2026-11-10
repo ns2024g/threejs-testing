@@ -45,15 +45,27 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 // Low, VHS-like resolution: the game is drawn about VHS_LINES pixels tall and stretched
 // smoothly to fill the screen, which gives it a soft, slightly squished tape look.
 const VHS_LINES = 480;
+// A boxy, old-TV picture shape (4:3.5), centred with black bars around it
+const SCREEN_ASPECT = 4 / 3.5;
+const screenSize = { w: window.innerWidth, h: window.innerHeight };
 function applyResolution() {
-  renderer.setPixelRatio(Math.min(1, VHS_LINES / window.innerHeight));
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  const fitW = Math.min(window.innerWidth, window.innerHeight * SCREEN_ASPECT);
+  screenSize.w = Math.round(fitW);
+  screenSize.h = Math.round(fitW / SCREEN_ASPECT);
+  renderer.setPixelRatio(Math.min(1, VHS_LINES / screenSize.h));
+  renderer.setSize(screenSize.w, screenSize.h);
+  Object.assign(renderer.domElement.style, {
+    position: 'fixed',
+    left: `${Math.round((window.innerWidth - screenSize.w) / 2)}px`,
+    top: `${Math.round((window.innerHeight - screenSize.h) / 2)}px`,
+  });
 }
 applyResolution();
 document.body.appendChild(renderer.domElement);
+document.getElementById('hud').style.zIndex = '1'; // keep the text above the game picture
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(CAM_FOV, window.innerWidth / window.innerHeight, 0.05, 400);
+const camera = new THREE.PerspectiveCamera(CAM_FOV, SCREEN_ASPECT, 0.05, 400);
 const world = createWorld(scene, renderer);
 await loadCharacters();
 setLoading(0.2);
@@ -193,9 +205,9 @@ addEventListener('mousemove', (e) => {
 });
 
 addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
   applyResolution();
+  camera.aspect = screenSize.w / screenSize.h;
+  camera.updateProjectionMatrix();
 });
 
 // Darkens the screen edges while running
