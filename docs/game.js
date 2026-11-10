@@ -5,6 +5,7 @@ import { joinRoom, selfId } from 'trystero';
 // so an update never mixes new and old cached files.
 const VERSION = new URL(import.meta.url).search;
 const { setLoading, finishLoading } = await import(`./loader.js${VERSION}`);
+const { startAnalogOverlay } = await import(`./analog.js${VERSION}`);
 setLoading(0.1);
 const { createWorld, heightAt, collide, addObstacle, HALF, SPAWN } = await import(`./world.js${VERSION}`);
 const { createCreature1, loadCreature1Geometry } = await import(`./creature1.js${VERSION}`);
@@ -369,5 +370,6 @@ function updateCamera(dt) {
 setLoading(0.9);
 await renderer.compileAsync(scene, camera);
 finishLoading();
+startAnalogOverlay();
 clock.getDelta(); // don't count the loading time as the first frame
 animate();
