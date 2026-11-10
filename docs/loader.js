@@ -1,41 +1,29 @@
-// The loading screen: a VHS blue screen with faint static. When loading finishes it flashes
-// lighter blue, then collapses to a thin bright line (like an old CRT switching off) to reveal
-// the game.
+// The loading screen: a dark screen with faint static where the loading percentage flashes up
+// now and then, like a VHS on-screen display. When loading finishes there's a quick blue flash,
+// then it cuts straight into the game.
 //
 // It's created here instead of in index.html because browsers can reuse a saved index.html for
 // up to 10 minutes after an update, while this file is always the newest (see the version tag in
 // index.html). No other imports, so it appears as early as possible.
 
 const VHS_BLUE = '#1b1fbf';
-const FLASH_BLUE = '#6c66f2';
+const FLASH_MS = 160;          // how long the blue flash lasts
 
 const CSS = `
   #loader {
     position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 22px; padding: 0 16px;
-    background: ${VHS_BLUE}; color: #f2f2ff; text-align: center;
-    font-family: 'Courier New', Courier, monospace; text-shadow: 2px 0 rgba(255,60,60,0.35), -2px 0 rgba(60,200,255,0.35);
-    animation: vhs-hum 2.4s infinite;
+    background: #000; color: #f2f2ff; text-align: center;
+    font-family: 'Courier New', Courier, monospace; text-shadow: 2px 0 rgba(255,60,60,0.4), -2px 0 rgba(60,200,255,0.4);
   }
-  @keyframes vhs-hum { 0%, 100% { filter: brightness(1); } 47% { filter: brightness(1.06); } 50% { filter: brightness(0.94); } }
-  #loader > * { transition: opacity 0.1s; }
   #loader-text { margin: 0; font-size: clamp(22px, 5vw, 42px); font-weight: normal; letter-spacing: 0.22em; }
   #loader-text:empty { display: none; }
-  #loader-track { width: min(420px, 80vw); height: 14px; padding: 3px; border: 2px solid #f2f2ff; box-sizing: border-box; }
-  #loader-bar { width: 0; height: 100%; background: #f2f2ff; transition: width 0.2s steps(6); }
-  #loader-percent { font-size: 18px; letter-spacing: 0.3em; }
-  #loader-static { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.13; mix-blend-mode: screen; pointer-events: none; }
-
-  /* The ending: flash lighter blue, collapse to a line, fade */
-  #loader::before {
-    content: ''; position: absolute; inset: 0; background: ${FLASH_BLUE}; opacity: 0; pointer-events: none;
-    transition: transform 0.24s cubic-bezier(0.6, 0, 0.9, 0.4), background 0.12s;
-  }
-  #loader.flash > * { opacity: 0; }
-  #loader.flash::before { opacity: 1; }
-  #loader.collapse { background: transparent; }
-  #loader.collapse::before { transform: scaleY(0.004); background: #eeeeff; box-shadow: 0 0 18px #c8c8ff; }
-  #loader.done { opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+  #loader-track { display: none; }
+  #loader-percent { font-size: clamp(28px, 6vw, 56px); letter-spacing: 0.15em; opacity: 0; }
+  #loader-percent.show { opacity: 1; }
+  #loader-static { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.1; mix-blend-mode: screen; pointer-events: none; }
+  #loader.flash { background: ${VHS_BLUE}; }
+  #loader.flash > * { visibility: hidden; }
 `;
 
 const style = document.createElement('style');
@@ -54,11 +42,10 @@ if (!root) {
   document.body.appendChild(root);
 }
 document.getElementById('loader-text').textContent = ''; // no message (a saved older page may have one)
-const bar = document.getElementById('loader-bar');
 const percentEl = document.getElementById('loader-percent');
-
-// Faint static over the blue screen
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Faint static
 const staticCanvas = document.createElement('canvas');
 staticCanvas.id = 'loader-static';
 staticCanvas.width = 200;
@@ -77,30 +64,38 @@ function drawStatic() {
 drawStatic();
 const staticTimer = reducedMotion ? 0 : setInterval(drawStatic, 50);
 
+// The percentage flashes up for a moment every so often (always shown if motion is reduced)
+let flashTimer = 0;
+if (reducedMotion) {
+  percentEl.classList.add('show');
+} else {
+  const flashPercent = () => {
+    percentEl.classList.add('show');
+    setTimeout(() => percentEl.classList.remove('show'), 90 + Math.random() * 140);
+    flashTimer = setTimeout(flashPercent, 350 + Math.random() * 650);
+  };
+  flashTimer = setTimeout(flashPercent, 150);
+}
+
 /** @param fraction 0..1 */
 export function setLoading(fraction) {
-  const percent = Math.round(fraction * 100);
-  bar.style.width = `${percent}%`;
-  percentEl.textContent = `${percent}%`;
+  percentEl.textContent = `${Math.round(fraction * 100)}%`;
 }
 
-/** Flash, collapse to a line like a CRT switching off, then reveal the game. */
+/** A quick blue flash, then straight into the game. */
 export function finishLoading() {
   setLoading(1);
+  clearTimeout(flashTimer);
   const end = () => { clearInterval(staticTimer); root.remove(); };
-  if (reducedMotion) {
-    root.classList.add('done');
-    setTimeout(end, 400);
-    return;
-  }
+  if (reducedMotion) { end(); return; }
   root.classList.add('flash');
-  setTimeout(() => root.classList.add('collapse'), 130);
-  setTimeout(() => root.classList.add('done'), 420);
-  setTimeout(end, 800);
+  setTimeout(end, FLASH_MS);
 }
 
-/** Shows that loading failed, instead of leaving the bar sitting there forever. */
+/** Shows that loading failed, instead of leaving the screen sitting there forever. */
 export function showLoadingError() {
+  clearTimeout(flashTimer);
   document.getElementById('loader-text').textContent = 'FAILED TO LOAD';
   percentEl.textContent = 'REFRESH THE PAGE';
+  percentEl.classList.add('show');
 }
