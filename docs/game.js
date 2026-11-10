@@ -44,9 +44,10 @@ const MOUSE_SMOOTHING = 22;    // higher = more direct mouse
 const SEND_INTERVAL = 1 / 20;  // send our position 20x per second while moving
 const HEARTBEAT = 2;           // ...and every 2 seconds even when standing still
 const APP_ID = 'ns2024g-threejs-testing'; // everyone with the same APP_ID + ROOM_ID
-const ROOM_ID = 'five-tapes-1';           // ends up in the same world. Change this whenever an update
-                                          // changes how players talk to each other, so old and new
-                                          // versions of the game never end up in the same room.
+// Everyone in the same room ends up in the same world. Change this whenever an update changes how
+// players talk to each other, so old and new versions never mix. Copies running on this computer
+// for testing get their own room, so they never interfere with real players.
+const ROOM_ID = 'five-tapes-1' + (['localhost', '127.0.0.1'].includes(location.hostname) ? '-dev' : '');
 
 // ---------- Renderer, scene, camera ----------
 const renderer = new THREE.WebGLRenderer({ antialias: false });
@@ -215,6 +216,7 @@ const hunt = createHunt({
 });
 eventAction.onMessage = (data, { peerId }) => hunt.onEvent(data, peerId);
 window.game.hunt = hunt;
+window.game.players = players;
 
 // ---------- Input ----------
 const keys = {};

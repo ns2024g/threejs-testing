@@ -227,10 +227,10 @@ export function createAudio() {
         build() {
           if (!ctx || this.nodes) return;
           const p = panner({ x, y, z });
-          p.refDistance = 1.2;
-          p.rolloffFactor = 2.2;
+          p.refDistance = 4;       // audible from much further away
+          p.rolloffFactor = 1.1;
           const g = ctx.createGain();
-          g.gain.value = 0.16;
+          g.gain.value = 0.22;
           const o = ctx.createOscillator();
           o.type = 'triangle';
           o.frequency.value = 58;

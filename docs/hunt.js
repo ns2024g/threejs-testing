@@ -17,7 +17,7 @@ const TAPE_COUNT = 5;
 const CATCH_RANGE = 1.15;      // metres
 const SEE_RANGE = 38;          // it can't be "seen" beyond this (fog)
 const BASE_SPEED = 2.6;        // m/s when nobody looks; +0.8 per tape played
-const WAKE_AFTER = 80;         // seconds before it starts hunting, if nobody touches a tape
+const WAKE_AFTER = 40;         // seconds before it starts hunting, if nobody touches a tape
 const EYE_DRY_TIME = 15;       // seconds until a forced blink (shorter as tapes are played)
 const BLINK_TIME = 0.3;
 
@@ -67,8 +67,16 @@ export function createHunt(o) {
   const tapeMat = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.4 });
   const labelMat = new THREE.MeshBasicMaterial({ color: 0xcfc6ad });     // unlit: glints faintly in the dark
   const ledMat = new THREE.MeshBasicMaterial({ color: 0xff2a1a });
-  function makeTapeMesh() {
+  function makeTapeMesh(withGlow = false) {
     const g = new THREE.Group();
+    g.scale.setScalar(1.8);   // a bit oversized so it reads at low resolution
+    if (withGlow) {
+      // A dim red pulse lighting up the room around it: look for it through doorways
+      const glow = new THREE.PointLight(0xff2a1a, 3, 9, 1.6);
+      glow.position.y = 0.25;
+      g.add(glow);
+      g.userData.glow = glow;
+    }
     g.add(new THREE.Mesh(tapeGeo, tapeMat));
     const label = new THREE.Mesh(labelGeo, labelMat);
     label.position.set(-0.01, 0, 0.012);
@@ -81,12 +89,13 @@ export function createHunt(o) {
   }
   const altarTop = () => heightAt(ALTAR.x, ALTAR.z) + 1.09;
   const tapes = TAPE_SPOTS.slice(0, TAPE_COUNT).map((s, id) => {
-    const mesh = makeTapeMesh();
+    const mesh = makeTapeMesh(true);
     scene.add(mesh);
     return { id, home: { ...s }, state: 'ground', x: s.x, z: s.z, holder: null, mesh, hum: null, slot: -1 };
   });
   // The tape you're carrying sits in the corner of your view
   const heldMesh = makeTapeMesh();
+  heldMesh.scale.setScalar(1);
   heldMesh.position.set(0.16, -0.15, -0.42);
   heldMesh.rotation.set(0.6, 0.4, 0.1);
   heldMesh.visible = false;
@@ -138,10 +147,17 @@ export function createHunt(o) {
   };
   cs.rx = cs.x; cs.rz = cs.z; cs.rry = cs.ry;
   const startPos = { x: cs.x, z: cs.z, ry: cs.ry };
-  let hostTime = 0, sendTimer = 0, teleportTimer = 0, stepSoundTimer = 0;
+  let hostTime = 0, sendTimer = 0, teleportTimer = 0, stepSoundTimer = 0, wasAwake = false;
   const lastCreaturePos = new THREE.Vector2(cs.x, cs.z);
 
-  const hostId = () => Object.keys(players).sort()[0];
+  // The host is the first player (by id) who is actually running the game right now. A player
+  // whose tab is hidden or frozen stops sending updates, so they can't stall the creature.
+  const hostId = () => {
+    const now = performance.now();
+    return Object.keys(players)
+      .filter((pid) => pid === selfId || now - (players[pid].seesAt || 0) < 4000)
+      .sort()[0];
+  };
   const isHost = () => hostId() === selfId;
 
   // ---------- Seeing ----------
@@ -333,6 +349,10 @@ export function createHunt(o) {
       if (sendTimer <= 0) { sendCreature(); sendTimer = 0.1; }
     }
 
+    // --- It wakes up: make sure everyone knows ---
+    if (cs.awake && !wasAwake && !ending) { say('IT IS AWAKE · DO NOT LOOK AWAY', 4); audio.sting(); }
+    wasAwake = cs.awake;
+
     // --- Show the creature where it is (smoothly), unless it's in your face ---
     const k = 1 - Math.exp(-14 * dt);
     cs.rx += (cs.x - cs.rx) * k;
@@ -387,7 +407,11 @@ export function createHunt(o) {
     }
 
     // --- Tapes: LED blink, pick up, play ---
-    for (const t of tapes) t.mesh.userData.led.visible = Math.sin(time * 4 + t.id) > 0;
+    for (const t of tapes) {
+      t.mesh.userData.led.visible = Math.sin(time * 4 + t.id) > 0;
+      // The glow pulses slowly, and only while the tape is lying somewhere waiting to be found
+      t.mesh.userData.glow.intensity = t.state === 'ground' ? 6 + 4 * Math.sin(time * 2.2 + t.id) : 0;
+    }
     heldMesh.userData.led.visible = Math.sin(time * 4) > 0;
     const ePressed = keys.KeyE && !ePrev;
     ePrev = !!keys.KeyE;
@@ -468,6 +492,6 @@ export function createHunt(o) {
     locked: false,
   };
   updateTapesText();
-  say('FIND THE FIVE TAPES · LISTEN FOR THE HUM', 6);
+  say('FIND THE FIVE TAPES · FOLLOW THE HUM AND THE RED GLOW', 7);
   return hunt;
 }
