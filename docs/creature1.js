@@ -27,7 +27,7 @@ const { buildCreature1Geometry, makeRng } = await import(`./creature1-geometry.j
  */
 export function loadCreature1Geometry(onProgress = () => {}) {
   return new Promise((resolve) => {
-    const fallback = () => resolve(buildCreature1Geometry({ onProgress })); // no worker support
+    const fallback = () => resolve(buildCreature1Geometry({ resolution: 0.016, onProgress })); // no worker support
     let worker;
     try {
       worker = new Worker(new URL(`./creature1-worker.js${VERSION}`, import.meta.url), { type: 'module' });

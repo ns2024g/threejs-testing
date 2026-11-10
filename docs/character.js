@@ -6,8 +6,8 @@ const VERSION = new URL(import.meta.url).search;
 const { createRig, HUMAN_DIMS: D } = await import(`./rig.js${VERSION}`);
 
 const STICK = 0.028;   // stick thickness (radius, metres)
-const stickGeo = new THREE.CylinderGeometry(1, 1, 1, 8).translate(0, 0.5, 0); // base at 0, 1 m long
-const ballGeo = new THREE.SphereGeometry(1, 16, 12);
+const stickGeo = new THREE.CylinderGeometry(1, 1, 1, 4).translate(0, 0.5, 0); // square sticks, base at 0, 1 m long
+const ballGeo = new THREE.SphereGeometry(1, 6, 4);   // blocky low-poly balls
 
 /** Nothing to load for stick figures (kept so game.js doesn't need to change). */
 export async function loadCharacters() {}

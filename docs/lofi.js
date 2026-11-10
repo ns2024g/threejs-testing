@@ -14,9 +14,9 @@ import * as THREE from 'three';
 export const LOFI = {
   exposure: 1.35,         // overall brightness before the look is applied
   lift: 0.022,            // raises the blacks to a murky grey-green instead of pure black
-  colorLevels: 32,        // shades per colour channel (PS1 = 32). Lower = more banding + dithering
+  colorLevels: 16,        // shades per colour channel (PS1 = 32). Lower = more banding + dithering
   ditherStrength: 1.0,    // 0 = none, 1 = full
-  snapGrid: [192, 144],   // vertex wobble grid; lower = more wobble (0 turns it off)
+  snapGrid: [80, 60],     // vertex wobble grid; lower = more wobble (0 turns it off)
   grain: 0.055,           // film grain amount
   vignette: 0.45,         // edge darkening
   fringe: 0.006,          // colour fringing toward the edges
@@ -126,6 +126,8 @@ export function createLofiRenderer(renderer) {
   const size = new THREE.Vector2();
 
   return {
+    /** Live settings: exposure, grain, dither, etc. (change .value to adjust) */
+    uniforms: material.uniforms,
     /** Prepare every shader up front (for the off-screen image and the look pass). */
     async compile(scene, camera) {
       renderer.setRenderTarget(target);

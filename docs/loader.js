@@ -14,17 +14,23 @@ const CSS = `
     position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 22px; padding: 0 16px;
     background: #000; color: #f2f2ff; text-align: center;
-    font-family: 'Courier New', Courier, monospace; text-shadow: 2px 0 rgba(255,60,60,0.4), -2px 0 rgba(60,200,255,0.4);
+    font-family: 'Press Start 2P', 'Courier New', monospace; text-shadow: 2px 0 rgba(255,60,60,0.4), -2px 0 rgba(60,200,255,0.4);
   }
   #loader-text { margin: 0; font-size: clamp(22px, 5vw, 42px); font-weight: normal; letter-spacing: 0.22em; }
   #loader-text:empty { display: none; }
   #loader-track { display: none; }
-  #loader-percent { font-size: clamp(28px, 6vw, 56px); letter-spacing: 0.15em; opacity: 0; }
+  #loader-percent { font-size: 24px; letter-spacing: 0.1em; opacity: 0; }
   #loader-percent.show { opacity: 1; }
   #loader-static { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.1; mix-blend-mode: screen; pointer-events: none; }
   #loader.flash { background: ${VHS_BLUE}; }
   #loader.flash > * { visibility: hidden; }
 `;
+
+// NES-style pixel font used by the loading screen, on-screen text and pause menu
+const font = document.createElement('link');
+font.rel = 'stylesheet';
+font.href = 'https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap';
+document.head.appendChild(font);
 
 const style = document.createElement('style');
 style.textContent = CSS;

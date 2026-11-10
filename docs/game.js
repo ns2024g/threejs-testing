@@ -5,9 +5,10 @@ import { joinRoom, selfId } from 'trystero';
 // so an update never mixes new and old cached files.
 const VERSION = new URL(import.meta.url).search;
 const { setLoading, finishLoading } = await import(`./loader.js${VERSION}`);
-const { enableVertexSnapping, createLofiRenderer } = await import(`./lofi.js${VERSION}`);
+const { enableVertexSnapping, createLofiRenderer, LOFI } = await import(`./lofi.js${VERSION}`);
 enableVertexSnapping(); // must happen before anything is drawn
 const { addTvFrame } = await import(`./tvframe.js${VERSION}`);
+const { createPauseMenu } = await import(`./menu.js${VERSION}`);
 setLoading(0.1);
 const { createWorld, heightAt, collide, addObstacle, HALF, SPAWN } = await import(`./world.js${VERSION}`);
 const { createCreature1, loadCreature1Geometry } = await import(`./creature1.js${VERSION}`);
@@ -24,8 +25,8 @@ const LIMIT = HALF - 1;        // edge of the walkable area
 
 // ---------- Camera settings ----------
 const EYE_HEIGHT = 0.12;       // eyes are this far above the base of the neck (about 1.69 m tall)
-const CAM_FOV = 45;
-const CAM_RUN_FOV = 95;        // field of view widens at a run
+let CAM_FOV = 45;              // (adjustable in the pause menu)
+let CAM_RUN_FOV = 95;          // field of view widens at a run
 const CAM_RUN_SHAKE = 0.007;   // how hard the view shakes while running (radians)
 const RUN_VIGNETTE = 0.55;     // how dark the screen edges get while running (0..1)
 const CAM_FOLLOW = 30;         // how tightly the view follows the head side to side
@@ -33,7 +34,7 @@ const CAM_FOLLOW_Y = 12;       // vertical follow — softer, so it absorbs some
 const CAM_STEP_KICK = 0.012;   // how hard each footstep jolts the camera
 const CAM_STRAFE_TILT = 0.02;  // tilt when moving left/right (radians)
 const CAM_SHAKE = 0.0012;      // subtle handheld drift
-const MOUSE_SENSITIVITY = 0.0022;
+let MOUSE_SENSITIVITY = 0.0022;  // (adjustable in the pause menu)
 const MOUSE_SMOOTHING = 22;    // higher = more direct mouse
 
 // ---------- Network settings ----------
@@ -46,7 +47,7 @@ const ROOM_ID = 'forest';                 // ends up in the same world
 const renderer = new THREE.WebGLRenderer({ antialias: false });
 // Low-quality look: the game is drawn only RES_LINES pixels tall and blown up with hard,
 // blocky pixels to fill the screen. Lower = crunchier.
-const RES_LINES = 240;
+let RES_LINES = 240;           // (adjustable in the pause menu)
 // "Reverse stretched res": the whole picture is squished slightly sideways while still filling
 // the screen, so everything looks a little thinner and taller. 1 = normal, lower = more squished.
 const SQUISH = 0.93;
@@ -59,8 +60,8 @@ applyResolution();
 renderer.domElement.style.imageRendering = 'pixelated'; // hard pixels instead of a soft blur
 // On-screen text styled like an old game's, instead of a modern font in a box
 Object.assign(document.getElementById('hud').style, {
-  background: 'none', padding: '0', fontFamily: '"Courier New", Courier, monospace', fontSize: '12px',
-  letterSpacing: '0.08em', textTransform: 'uppercase', color: '#cfd2c4', textShadow: '1px 1px 0 #000', opacity: '0.85',
+  background: 'none', padding: '0', fontFamily: '"Press Start 2P", "Courier New", monospace', fontSize: '8px',
+  lineHeight: '14px', letterSpacing: '0', textTransform: 'uppercase', color: '#cfd2c4', textShadow: '1px 1px 0 #000', opacity: '0.85',
   // inside the TV screen, clear of the bezel and the rounded corner
   left: 'calc(3.5vw + 26px)', top: 'calc(3.5vh + 20px)', zIndex: '7',
 });
@@ -143,7 +144,7 @@ const lightColor = 0xffd9a8;
 const glow = new THREE.PointLight(lightColor, GLOW_INTENSITY, GLOW_RANGE, 2);
 const ahead = new THREE.SpotLight(lightColor, AHEAD_INTENSITY, AHEAD_RANGE, AHEAD_WIDTH, 1, 2);
 ahead.castShadow = true;                 // trees and grass cast shadows away from you
-ahead.shadow.mapSize.set(1024, 1024);
+ahead.shadow.mapSize.set(128, 128);   // blocky low-res shadows
 ahead.shadow.camera.near = 0.3;
 ahead.shadow.bias = -0.0005;
 ahead.shadow.normalBias = 0.03;
@@ -195,14 +196,21 @@ stateAction.onMessage = (data, { peerId }) => {
 
 // ---------- Input ----------
 const keys = {};
-addEventListener('keydown', (e) => { keys[e.code] = true; });
+addEventListener('keydown', (e) => {
+  if (menu.isOpen) {                       // the game ignores keys while the menu is up
+    if (e.code === 'Escape') menu.back();
+    return;
+  }
+  if (e.code === 'Escape' && !document.pointerLockElement) { menu.open(); return; }
+  keys[e.code] = true;
+});
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 
 let targetYaw = Math.PI, yaw = Math.PI;   // which way you're facing (starts toward the creature)
 let targetPitch = 0, pitch = 0;           // looking up (negative) or down (positive)
 
-renderer.domElement.addEventListener('click', () => renderer.domElement.requestPointerLock());
+renderer.domElement.addEventListener('click', () => grabMouse());
 addEventListener('mousemove', (e) => {
   if (document.pointerLockElement !== renderer.domElement) return;
   targetYaw -= e.movementX * MOUSE_SENSITIVITY;
@@ -214,6 +222,53 @@ addEventListener('resize', () => {
   camera.aspect = viewAspect(); // squished sideways
   camera.updateProjectionMatrix();
 });
+
+// ---------- Pause menu (Esc) ----------
+const RESOLUTIONS = [120, 160, 200, 240];   // lines tall; lower = crunchier
+const menu = createPauseMenu({
+  defs: [
+    { key: 'sensitivity', label: 'Mouse', min: 1, max: 10, step: 1 },
+    { key: 'fov', label: 'Field of view', min: 30, max: 90, step: 5 },
+    { key: 'brightness', label: 'Brightness', min: 1, max: 10, step: 1 },
+    { key: 'resolution', label: 'Resolution', min: 0, max: RESOLUTIONS.length - 1, step: 1, format: (v) => `${RESOLUTIONS[v]}p` },
+    { key: 'grain', label: 'Grain', min: 0, max: 10, step: 1 },
+    { key: 'dither', label: 'Dither', min: 0, max: 1, step: 1, format: (v) => (v ? 'On' : 'Off') },
+  ],
+  defaults: { sensitivity: 5, fov: 45, brightness: 5, resolution: 1, grain: 5, dither: 1 },
+  onChange(s) {
+    MOUSE_SENSITIVITY = 0.0022 * (s.sensitivity / 5);
+    CAM_FOV = s.fov;
+    CAM_RUN_FOV = Math.min(s.fov + 50, 115);
+    camera.fov = CAM_FOV;
+    camera.updateProjectionMatrix();
+    lofi.uniforms.exposure.value = LOFI.exposure * Math.pow(1.18, s.brightness - 5);
+    lofi.uniforms.grain.value = LOFI.grain * (s.grain / 5);
+    lofi.uniforms.dither.value = s.dither ? LOFI.ditherStrength : 0;
+    if (RES_LINES !== RESOLUTIONS[s.resolution]) {
+      RES_LINES = RESOLUTIONS[s.resolution];
+      applyResolution();
+    }
+  },
+  onResume: grabMouse,
+});
+function grabMouse() {
+  // Browsers refuse to re-grab the mouse for about a second after Esc; just ask to click again
+  try {
+    const p = renderer.domElement.requestPointerLock();
+    if (p && p.catch) p.catch(() => menu.message('Click Resume again'));
+  } catch { menu.message('Click Resume again'); }
+}
+let hadMouse = false;
+document.addEventListener('pointerlockchange', () => {
+  if (document.pointerLockElement === renderer.domElement) {
+    hadMouse = true;
+    menu.close();
+  } else if (hadMouse) {                    // Esc freed the mouse: pause
+    for (const k in keys) keys[k] = false;
+    menu.open();
+  }
+});
+document.querySelector('#hud div:nth-child(2)').textContent = 'Click to play · WASD move · Shift run · Esc menu';
 
 // Darkens the screen edges while running
 const vignette = document.createElement('div');
@@ -246,8 +301,12 @@ let heartbeatTimer = 0;
 let lastSent = { x: NaN, z: NaN, ry: NaN };
 let lastSpeed = 0;
 let time = 0;
+const FPS_CAP = 30;            // like PS1 games: the picture updates at most 30 times a second
+let lastFrameTime = -Infinity;
 
-function animate() {
+function animate(now = 0) {
+  if (now - lastFrameTime < 1000 / FPS_CAP - 2) { requestAnimationFrame(animate); return; }
+  lastFrameTime = now;
   const dt = Math.min(clock.getDelta(), 0.1);
   time += dt;
 

@@ -159,7 +159,7 @@ export function createWorld(scene, renderer) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.BasicShadowMap;   // hard, jagged shadow edges
 
   // --- Sky ---
   // A huge sickly moon hangs low over the church, seen from the spawn point
@@ -200,7 +200,7 @@ export function createWorld(scene, renderer) {
 
   // The sickly moon, with a soft glow around it
   const moon = new THREE.Mesh(
-    new THREE.SphereGeometry(17, 32, 20),
+    new THREE.SphereGeometry(17, 8, 6),
     new THREE.MeshBasicMaterial({ color: new THREE.Color(0.035, 0.045, 0.035), fog: false, depthWrite: false, toneMapped: false })
   );
   moon.renderOrder = -1;
@@ -214,7 +214,7 @@ export function createWorld(scene, renderer) {
   // Moonlight: dim and green, throwing long shadows from the ruins toward the spawn point
   const sun = new THREE.DirectionalLight(0xa9c2a4, 1.6);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(256, 256);                 // blocky low-res shadows
   const sc = sun.shadow.camera;
   sc.left = -35; sc.right = 35; sc.top = 35; sc.bottom = -35; sc.near = 1; sc.far = 160;
   sun.shadow.bias = -0.0004;
@@ -362,12 +362,12 @@ export function createWorld(scene, renderer) {
 function makeDeadTree(seed, branches) {
   const rng = mulberry32(seed);
   const parts = [];
-  const trunk = new THREE.CylinderGeometry(0.05, 0.2, 6, 7);
+  const trunk = new THREE.CylinderGeometry(0.05, 0.2, 6, 4);
   trunk.translate(0, 3, 0);
   parts.push(trunk);
   const Z = new THREE.Vector3(0, 0, 1), Y = new THREE.Vector3(0, 1, 0);
   const limb = (from, angle, tilt, len, r) => {
-    const g = new THREE.CylinderGeometry(r * 0.25, r, len, 5);
+    const g = new THREE.CylinderGeometry(r * 0.25, r, len, 3);
     g.translate(0, len / 2, 0);
     g.rotateZ(tilt);
     g.rotateY(angle);
@@ -402,7 +402,7 @@ function makeGlowTexture() {
 
 // Grainy grey texture that adds small-scale detail to the ground colours.
 function makeDetailTexture(renderer, repeat) {
-  const size = 256;
+  const size = 64;                                     // tiny texture, big blocky texels
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d');
@@ -420,7 +420,7 @@ function makeDetailTexture(renderer, repeat) {
   for (let i = 0; i < size * size; i++) {
     const x = i % size, y = Math.floor(i / size);
     // soft blotches + fine grain
-    const n = 0.6 * tileNoise(x / 16, y / 16, size / 16) + 0.4 * tileNoise(x / 4, y / 4, size / 4);
+    const n = 0.6 * tileNoise(x / 8, y / 8, size / 8) + 0.4 * tileNoise(x / 2, y / 2, size / 2);
     const v = 170 + n * 70 + (rng() - 0.5) * 40;
     img.data.set([v, v, v, 255], i * 4);
   }
@@ -429,6 +429,8 @@ function makeDetailTexture(renderer, repeat) {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(repeat, repeat);
-  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  tex.magFilter = THREE.NearestFilter;                 // no smoothing between texels
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
   return tex;
 }
