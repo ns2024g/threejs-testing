@@ -10,7 +10,10 @@ enableVertexSnapping(); // must happen before anything is drawn
 const { addTvFrame } = await import(`./tvframe.js${VERSION}`);
 const { createPauseMenu } = await import(`./menu.js${VERSION}`);
 setLoading(0.1);
-const { createWorld, heightAt, collide, addObstacle, HALF, SPAWN } = await import(`./world.js${VERSION}`);
+const { createWorld, heightAt, collide, HALF, SPAWN, ALTAR, TAPE_SPOTS } = await import(`./world.js${VERSION}`);
+const { createAudio } = await import(`./audio.js${VERSION}`);
+const { createHunt } = await import(`./hunt.js${VERSION}`);
+const audio = createAudio();   // all sound; starts on your first click
 const { createCreature1, loadCreature1Geometry } = await import(`./creature1.js${VERSION}`);
 const { loadCharacters, createCharacter } = await import(`./character.js${VERSION}`);
 
@@ -41,7 +44,9 @@ const MOUSE_SMOOTHING = 22;    // higher = more direct mouse
 const SEND_INTERVAL = 1 / 20;  // send our position 20x per second while moving
 const HEARTBEAT = 2;           // ...and every 2 seconds even when standing still
 const APP_ID = 'ns2024g-threejs-testing'; // everyone with the same APP_ID + ROOM_ID
-const ROOM_ID = 'forest';                 // ends up in the same world
+const ROOM_ID = 'five-tapes-1';           // ends up in the same world. Change this whenever an update
+                                          // changes how players talk to each other, so old and new
+                                          // versions of the game never end up in the same room.
 
 // ---------- Renderer, scene, camera ----------
 const renderer = new THREE.WebGLRenderer({ antialias: false });
@@ -127,7 +132,6 @@ const creature = createCreature1({ geometry: creatureGeometry });
 creature.object.position.set(CREATURE_POS.x, heightAt(CREATURE_POS.x, CREATURE_POS.z), CREATURE_POS.z);
 creature.object.rotation.y = Math.PI;       // the model faces +Z; turn it toward the spawn point
 scene.add(creature.object);
-addObstacle(CREATURE_POS.x, CREATURE_POS.z, 0.35);
 creature.watch(me.model.head);              // head and eyes follow your character
 window.game.creature = creature;            // try game.creature.scream() in the browser console
 
@@ -163,6 +167,9 @@ function updatePlayerLight(dt) {
   aheadAim.z = damp(aheadAim.z, tz, 8, dt);
   aheadAim.y = heightAt(aheadAim.x, aheadAim.z);
   ahead.target.position.copy(aheadAim);
+  // Sometimes the light just... dies (see hunt.js)
+  glow.intensity = GLOW_INTENSITY * hunt.lightFactor;
+  ahead.intensity = AHEAD_INTENSITY * hunt.lightFactor;
 }
 
 // ---------- Peer-to-peer networking ----------
@@ -177,9 +184,10 @@ updateStatus();
 
 const room = joinRoom({ appId: APP_ID }, ROOM_ID);
 const stateAction = room.makeAction('state');
-const myState = () => ({ x: mePos.x, z: mePos.z, ry: me.model.root.rotation.y, color: myColor });
+// `sees`: whether I can currently see the creature (it only moves when nobody can)
+const myState = () => ({ x: mePos.x, z: mePos.z, ry: me.model.root.rotation.y, color: myColor, sees: hunt.mySees ? 1 : 0 });
 
-room.onPeerJoin = (peerId) => stateAction.send(myState(), { target: peerId });
+room.onPeerJoin = (peerId) => { stateAction.send(myState(), { target: peerId }); hunt.onPeerJoin(peerId); };
 room.onPeerLeave = (peerId) => { removePlayer(peerId); updateStatus(); };
 
 stateAction.onMessage = (data, { peerId }) => {
@@ -191,8 +199,22 @@ stateAction.onMessage = (data, { peerId }) => {
   const z = THREE.MathUtils.clamp(data.z, -LIMIT, LIMIT);
   p.target.set(x, heightAt(x, z), z);
   p.targetRy = data.ry;
+  p.sees = data.sees === 1;
+  p.seesAt = performance.now();
   if (isNew) updateStatus();
 };
+
+// ---------- The game: tapes, the creature, blinking (see hunt.js) ----------
+const eventAction = room.makeAction('ev');
+const hunt = createHunt({
+  scene, camera, creature, me, mePos, players, selfId, audio, heightAt, collide,
+  ALTAR, TAPE_SPOTS, SPAWN, HALF, lofi, statusEl,
+  send: (data) => eventAction.send(data),
+  refreshStatus: () => updateStatus(),
+  onRespawn: () => { anchorReady = false; velocity.set(0, 0, 0); },
+});
+eventAction.onMessage = (data, { peerId }) => hunt.onEvent(data, peerId);
+window.game.hunt = hunt;
 
 // ---------- Input ----------
 const keys = {};
@@ -224,6 +246,7 @@ addEventListener('resize', () => {
 });
 
 // ---------- Pause menu (Esc) ----------
+let grainBase = LOFI.grain;   // grain from settings; the creature being near adds more
 const RESOLUTIONS = [120, 160, 200, 240];   // lines tall; lower = crunchier
 const menu = createPauseMenu({
   defs: [
@@ -233,9 +256,12 @@ const menu = createPauseMenu({
     { key: 'resolution', label: 'Resolution', min: 0, max: RESOLUTIONS.length - 1, step: 1, format: (v) => `${RESOLUTIONS[v]}p` },
     { key: 'grain', label: 'Grain', min: 0, max: 10, step: 1 },
     { key: 'dither', label: 'Dither', min: 0, max: 1, step: 1, format: (v) => (v ? 'On' : 'Off') },
+    { key: 'volume', label: 'Volume', min: 0, max: 10, step: 1 },
   ],
-  defaults: { sensitivity: 5, fov: 45, brightness: 5, resolution: 1, grain: 5, dither: 1 },
+  defaults: { sensitivity: 5, fov: 45, brightness: 5, resolution: 1, grain: 5, dither: 1, volume: 6 },
   onChange(s) {
+    audio.setVolume(s.volume / 10);
+    grainBase = LOFI.grain * (s.grain / 5);
     MOUSE_SENSITIVITY = 0.0022 * (s.sensitivity / 5);
     CAM_FOV = s.fov;
     CAM_RUN_FOV = Math.min(s.fov + 50, 115);
@@ -252,6 +278,7 @@ const menu = createPauseMenu({
   onResume: grabMouse,
 });
 function grabMouse() {
+  audio.start(); // sound can only start from a click
   // Browsers refuse to re-grab the mouse for about a second after Esc; just ask to click again
   try {
     const p = renderer.domElement.requestPointerLock();
@@ -268,7 +295,7 @@ document.addEventListener('pointerlockchange', () => {
     menu.open();
   }
 });
-document.querySelector('#hud div:nth-child(2)').textContent = 'Click to play · WASD move · Shift run · Esc menu';
+document.querySelector('#hud div:nth-child(2)').textContent = 'Click to play · WASD move · Shift run · E use · Hold Space close eyes · Esc menu';
 
 // Darkens the screen edges while running
 const vignette = document.createElement('div');
@@ -288,6 +315,7 @@ let anchorReady = false;
 // Each heel strike gives the camera a small downward jolt, harder when running
 me.model.onFootstep = (side, speed) => {
   stepKickVel -= CAM_STEP_KICK * (0.2 + Math.min(speed / RUN_SPEED, 1) * 1.1) * 60;
+  audio.footstep(speed);
 };
 
 // ---------- Game loop ----------
@@ -307,7 +335,12 @@ let lastFrameTime = -Infinity;
 function animate(now = 0) {
   if (now - lastFrameTime < 1000 / FPS_CAP - 2) { requestAnimationFrame(animate); return; }
   lastFrameTime = now;
-  const dt = Math.min(clock.getDelta(), 0.1);
+  step(Math.min(clock.getDelta(), 0.1));
+  requestAnimationFrame(animate);
+}
+
+// One tick of the game
+function step(dt) {
   time += dt;
 
   // --- Mouse look, slightly smoothed so it has weight ---
@@ -322,6 +355,7 @@ function animate(now = 0) {
   if (keys.KeyS) input.sub(forward);
   if (keys.KeyD) input.add(right);
   if (keys.KeyA) input.sub(right);
+  if (hunt.locked) input.set(0, 0, 0);   // caught, or the tape is ending
   const moving = input.lengthSq() > 0;
   const running = keys.ShiftLeft || keys.ShiftRight;
   if (moving) input.normalize().multiplyScalar(running ? RUN_SPEED : WALK_SPEED);
@@ -361,9 +395,10 @@ function animate(now = 0) {
   if (sendTimer >= SEND_INTERVAL) {
     sendTimer = 0;
     const ry = root.rotation.y;
-    if (mePos.x !== lastSent.x || mePos.z !== lastSent.z || ry !== lastSent.ry || heartbeatTimer >= HEARTBEAT) {
+    const sees = hunt.mySees;
+    if (mePos.x !== lastSent.x || mePos.z !== lastSent.z || ry !== lastSent.ry || sees !== lastSent.sees || heartbeatTimer >= HEARTBEAT) {
       stateAction.send(myState());
-      lastSent = { x: mePos.x, z: mePos.z, ry };
+      lastSent = { x: mePos.x, z: mePos.z, ry, sees };
       heartbeatTimer = 0;
     }
   }
@@ -385,11 +420,18 @@ function animate(now = 0) {
 
   creature.update(dt);
   updateCamera(dt);
+  hunt.update(dt, keys, time);
   updatePlayerLight(dt);
   world.update(mePos);
-  lofi.render(scene, camera, time);
-  requestAnimationFrame(animate);
+  // Ears follow the camera
+  listener.position.copy(camera.position);
+  listener.forward.set(0, 0, -1).applyQuaternion(camera.quaternion);
+  listener.up.set(0, 1, 0).applyQuaternion(camera.quaternion);
+  audio.update(dt, listener);
+  lofi.uniforms.grain.value = grainBase + hunt.grainBoost;
+  lofi.render(scene, hunt.renderCamera, time);
 }
+const listener = { position: new THREE.Vector3(), forward: new THREE.Vector3(), up: new THREE.Vector3() };
 
 // ---------- First-person camera ----------
 function updateCamera(dt) {
@@ -454,5 +496,6 @@ await lofi.compile(scene, camera);
 finishLoading();
 clock.getDelta(); // don't count the loading time as the first frame
 // Debug helper: draw one frame by hand (useful when the page isn't animating)
-window.game.frame = () => { updateCamera(1 / 60); updatePlayerLight(1 / 60); world.update(mePos); lofi.render(scene, camera, time); };
+window.game.frame = (dt = 1 / 30) => step(dt);
+window.game.keys = keys;
 animate();

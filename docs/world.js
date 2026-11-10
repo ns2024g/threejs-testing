@@ -84,6 +84,19 @@ const BUILDINGS = [];
 }
 const insidePad = (x, z, margin = 0) => pads.some((p) => Math.hypot(p.x - x, p.z - z) < p.inner + margin);
 
+// Where the five tapes are hidden: against the back wall inside four buildings spread around
+// the village, plus one inside the graveyard crypt
+export const TAPE_SPOTS = (() => {
+  const byAngle = [...BUILDINGS].sort((a, b) => Math.atan2(a.x, a.z) - Math.atan2(b.x, b.z));
+  const picks = [0, 1, 2, 3].map((i) => byAngle[Math.floor((i + 0.5) * byAngle.length / 4)]);
+  const spots = picks.map((b) => {
+    const lz = b.d / 2 - 1.1;                     // just inside the back wall
+    return { x: b.x + lz * Math.sin(b.ry), z: b.z + lz * Math.cos(b.ry) };
+  });
+  spots.push({ x: GRAVEYARD.x, z: GRAVEYARD.z });  // inside the crypt
+  return spots;
+})();
+
 /** Ground height at a world position. Used for the terrain, props and players. */
 export function heightAt(x, z) {
   let h = baseHeight(x, z);

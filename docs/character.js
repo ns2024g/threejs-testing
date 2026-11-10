@@ -72,6 +72,8 @@ export function createCharacter(color, groundAt) {
     animate: rig.animate,
     /** Invisible to the camera, but still casts a shadow (for your own first-person body). */
     hideFromView() { mat.colorWrite = false; mat.depthWrite = false; },
+    /** Hide or show the body to the camera (it always casts a shadow either way). */
+    setHidden(hidden) { mat.colorWrite = !hidden; mat.depthWrite = !hidden; },
     dispose() { mat.dispose(); },
     get runAmount() { return rig.runAmount; },
     set onFootstep(fn) { rig.onFootstep = fn; },
