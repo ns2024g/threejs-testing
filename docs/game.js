@@ -65,7 +65,9 @@ document.body.appendChild(renderer.domElement);
 document.getElementById('hud').style.zIndex = '1'; // keep the text above the game picture
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(CAM_FOV, SCREEN_ASPECT, 0.05, 400);
+// The camera sees the full widescreen view, which is then squeezed into the boxy 4:3.5
+// picture, so everything looks squished, like a widescreen image forced onto an old TV
+const camera = new THREE.PerspectiveCamera(CAM_FOV, window.innerWidth / window.innerHeight, 0.05, 400);
 const world = createWorld(scene, renderer);
 await loadCharacters();
 setLoading(0.2);
@@ -206,7 +208,7 @@ addEventListener('mousemove', (e) => {
 
 addEventListener('resize', () => {
   applyResolution();
-  camera.aspect = screenSize.w / screenSize.h;
+  camera.aspect = window.innerWidth / window.innerHeight; // keep the widescreen view (squished)
   camera.updateProjectionMatrix();
 });
 
