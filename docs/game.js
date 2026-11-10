@@ -7,6 +7,7 @@ const VERSION = new URL(import.meta.url).search;
 const { setLoading, finishLoading } = await import(`./loader.js${VERSION}`);
 const { enableVertexSnapping, createLofiRenderer } = await import(`./lofi.js${VERSION}`);
 enableVertexSnapping(); // must happen before anything is drawn
+const { addTvFrame } = await import(`./tvframe.js${VERSION}`);
 setLoading(0.1);
 const { createWorld, heightAt, collide, addObstacle, HALF, SPAWN } = await import(`./world.js${VERSION}`);
 const { createCreature1, loadCreature1Geometry } = await import(`./creature1.js${VERSION}`);
@@ -60,7 +61,10 @@ renderer.domElement.style.imageRendering = 'pixelated'; // hard pixels instead o
 Object.assign(document.getElementById('hud').style, {
   background: 'none', padding: '0', fontFamily: '"Courier New", Courier, monospace', fontSize: '12px',
   letterSpacing: '0.08em', textTransform: 'uppercase', color: '#cfd2c4', textShadow: '1px 1px 0 #000', opacity: '0.85',
+  // inside the TV screen, clear of the bezel and the rounded corner
+  left: 'calc(3.5vw + 26px)', top: 'calc(3.5vh + 20px)', zIndex: '7',
 });
+addTvFrame(); // frame the game in an old CRT TV (see tvframe.js)
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
