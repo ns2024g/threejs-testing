@@ -161,6 +161,8 @@ export function createAudio() {
       }
     },
 
+    /** Your own footstep, but out there in the dark (the creature walking your path) */
+    echoStep(at, speed = 1.6) { burst({ freq: 500 + speed * 80, gain: 0.5 + speed * 0.06, decay: 0.11, at }); burst({ freq: 140, q: 1.5, gain: 0.35, decay: 0.16, at }); },
     footstep(speed) { burst({ freq: 500 + speed * 80, gain: 0.04 + speed * 0.008, decay: 0.09 }); },
     creatureStep(at) { burst({ freq: 260, q: 2, gain: 0.7, decay: 0.22, at }); burst({ freq: 1800, type: 'bandpass', q: 6, gain: 0.25, decay: 0.05, at, delay: 0.02 }); },
     click() { burst({ freq: 3000, type: 'bandpass', q: 8, gain: 0.25, decay: 0.03 }); },

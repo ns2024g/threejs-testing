@@ -185,8 +185,7 @@ updateStatus();
 
 const room = joinRoom({ appId: APP_ID }, ROOM_ID);
 const stateAction = room.makeAction('state');
-// `sees`: whether I can currently see the creature (it only moves when nobody can)
-const myState = () => ({ x: mePos.x, z: mePos.z, ry: me.model.root.rotation.y, color: myColor, sees: hunt.mySees ? 1 : 0 });
+const myState = () => ({ x: mePos.x, z: mePos.z, ry: me.model.root.rotation.y, color: myColor });
 
 room.onPeerJoin = (peerId) => { stateAction.send(myState(), { target: peerId }); hunt.onPeerJoin(peerId); };
 room.onPeerLeave = (peerId) => { removePlayer(peerId); updateStatus(); };
@@ -200,12 +199,11 @@ stateAction.onMessage = (data, { peerId }) => {
   const z = THREE.MathUtils.clamp(data.z, -LIMIT, LIMIT);
   p.target.set(x, heightAt(x, z), z);
   p.targetRy = data.ry;
-  p.sees = data.sees === 1;
-  p.seesAt = performance.now();
+  p.seesAt = performance.now();      // (when we last heard from them: inactive players can't host)
   if (isNew) updateStatus();
 };
 
-// ---------- The game: tapes, the creature, blinking (see hunt.js) ----------
+// ---------- The game: tapes and the creature that replays you (see hunt.js) ----------
 const eventAction = room.makeAction('ev');
 const hunt = createHunt({
   scene, camera, creature, me, mePos, players, selfId, audio, heightAt, collide,
@@ -297,7 +295,7 @@ document.addEventListener('pointerlockchange', () => {
     menu.open();
   }
 });
-document.querySelector('#hud div:nth-child(2)').textContent = 'Click to play · WASD move · Shift run · E use · Hold Space close eyes · Esc menu';
+document.querySelector('#hud div:nth-child(2)').textContent = 'Click to play · WASD move · Shift run · E use · Esc menu';
 
 // Darkens the screen edges while running
 const vignette = document.createElement('div');
@@ -397,10 +395,9 @@ function step(dt) {
   if (sendTimer >= SEND_INTERVAL) {
     sendTimer = 0;
     const ry = root.rotation.y;
-    const sees = hunt.mySees;
-    if (mePos.x !== lastSent.x || mePos.z !== lastSent.z || ry !== lastSent.ry || sees !== lastSent.sees || heartbeatTimer >= HEARTBEAT) {
+    if (mePos.x !== lastSent.x || mePos.z !== lastSent.z || ry !== lastSent.ry || heartbeatTimer >= HEARTBEAT) {
       stateAction.send(myState());
-      lastSent = { x: mePos.x, z: mePos.z, ry, sees };
+      lastSent = { x: mePos.x, z: mePos.z, ry };
       heartbeatTimer = 0;
     }
   }

@@ -267,6 +267,11 @@ export function createCreature1(opts = {}) {
   const SCREAM_LEN = 2.6;
   let yaw = 0, pitch = 0;
   const hipsRest = b.hips.position.clone();
+  // locomotion / jumpscare layers (see setGait / setLunge)
+  let gaitSpeed = 0, gaitBlend = 0, phase = 0, lunge = 0, shake = 0, loom = 0;
+  let twitchT = 0, twitchRoll = 0, twitchYaw = 0;
+  let onStep = null;
+  const mixR = (o, k, v, w) => { o.rotation[k] += (v - o.rotation[k]) * w; };
 
   function randomSnap() {
     const kinds = [
@@ -347,6 +352,97 @@ export function createCreature1(opts = {}) {
       b['clav' + n].rotation.z = side * 0.01 * breath;
     }
 
+    // ---- RUN: a limping, head-cocked lurch when slow; when fast it drops onto its long arms
+    // and bounds at you on all fours, head locked level and staring, snapping the wrong way.
+    const sp = Math.abs(gaitSpeed);
+    gaitBlend += ((sp > 0.25 ? 1 : 0) - gaitBlend) * Math.min(1, dt * 7);
+    const q4 = THREE.MathUtils.smoothstep(sp, 2.3, 4.0);
+    const stride = 1.25 + q4 * 1.45;                 // metres per full cycle
+    const prevPh = phase;
+    phase += Math.sign(gaitSpeed) * dt * sp / stride * Math.PI * 2;
+    if (Math.floor(prevPh / Math.PI) !== Math.floor(phase / Math.PI) && gaitBlend > 0.3) {
+      if (onStep) onStep(q4);
+      if (rng() < 0.18 + q4 * 0.2) {                 // a stride where its head snaps sideways
+        twitchT = rand(0.1, 0.3); twitchRoll = rand(1.0, 1.9) * (rng() < 0.5 ? -1 : 1); twitchYaw = rand(-1.3, 1.3);
+      }
+    }
+    twitchT = Math.max(0, twitchT - dt);
+    const g = gaitBlend;
+    let hipsY = 0;
+    if (g > 0.001) {
+      const W = 1 - q4, R = q4, ph = phase, S = Math.sin(ph), C = Math.cos(ph);
+      const L = (a, bb) => a * W + bb * R;
+      hipsY = L(-0.04 * Math.abs(C), -0.3 + 0.12 * Math.max(0, Math.sin(ph - 0.6)));
+      b.hips.rotation.set(0, 0, L(0.1 * S, 0.05 * S) * g);
+      mixR(b.spine, 'x', L(0.28, 0.66), g);
+      mixR(b.chest, 'x', L(0.22, 0.55 + 0.14 * Math.sin(ph + 1)), g);
+      mixR(b.chest, 'z', L(0.1 * S, 0.12 * S), g);
+      mixR(b.neck2, 'x', L(-0.15, -0.85), g);
+      mixR(b.head, 'x', L(-0.05, -0.4), g);
+      mixR(b.head, 'z', L(0.55, 0.15), g);              // permanently cocked to one side
+      // legs (nothing else drives them, so set them outright)
+      for (const [n, off] of [['R', 0], ['L', 0.55]]) {
+        const pw = ph + (n === 'L' ? Math.PI : 0) * W + off * R;
+        const s = Math.sin(pw), c = Math.cos(pw);
+        const drag = n === 'L' ? 1 : 0;                 // the left leg drags when it walks
+        const tw = L(drag ? 0.22 * s : -0.5 * s, -0.7 + 0.85 * s);
+        const sw = L(drag ? 0.15 : 0.75 * Math.max(0, c), 1.1 + 0.55 * Math.max(0, c));
+        const fw = L(drag ? 0.5 : -0.2 * Math.max(0, c), -0.5 + 0.3 * s);
+        b['thigh' + n].rotation.x = tw * g;
+        b['shin' + n].rotation.x = sw * g;
+        b['foot' + n].rotation.x = fw * g;
+      }
+      // arms: dangling and swinging when it walks; front legs when it runs
+      const bend = b.spine.rotation.x + b.chest.rotation.x;
+      for (const [n, side, off] of [['R', 1, 0], ['L', -1, 0.55]]) {
+        const pa = ph + Math.PI + off * R;
+        const s = Math.sin(pa), c = Math.cos(pa);
+        mixR(b['arm' + n], 'x', L(side * 0.3 * Math.sin(ph) * (side < 0 ? 0.6 : 1), -bend - 0.4 + 0.85 * s), g);
+        mixR(b['arm' + n], 'z', L(side * 0.08, side * 0.3), g);
+        mixR(b['fore' + n], 'x', L(-0.15, -0.2 - 0.5 * Math.max(0, c)), g);
+        mixR(b['fing' + n], 'z', L(-side * 0.15, -side * 0.8), g);
+        mixR(b['tip' + n], 'z', L(-side * 0.25, -side * 1.2), g);
+      }
+    } else {
+      b.hips.rotation.set(0, 0, 0);
+      for (const n of ['R', 'L']) for (const k of ['thigh', 'shin', 'foot']) b[k + n].rotation.x = 0;
+    }
+    if (twitchT > 0) { b.head.rotation.z += twitchRoll; b.head.rotation.y += twitchYaw; b.neck2.rotation.z += twitchRoll * 0.3; }
+
+    // ---- LUNGE (jumpscare): arms flung wide around you, fingers splayed, chin up, teeth out
+    if (lunge > 0.001) {
+      const w = lunge;
+      mixR(b.spine, 'x', 0.32, w); mixR(b.chest, 'x', 0.28, w); mixR(b.chest, 'z', 0, w);
+      mixR(b.neck2, 'x', -0.28, w); mixR(b.head, 'x', -0.42, w); mixR(b.head, 'z', 0.25, w);
+      for (const [n, side] of [['R', 1], ['L', -1]]) {
+        mixR(b['arm' + n], 'x', -1.45, w); mixR(b['arm' + n], 'z', side * 0.95, w);
+        mixR(b['fore' + n], 'x', -0.75, w);
+        mixR(b['fing' + n], 'z', side * 0.55, w); mixR(b['tip' + n], 'z', side * 0.45, w);
+        mixR(b['thigh' + n], 'x', -0.4, w); mixR(b['shin' + n], 'x', 0.7, w);
+      }
+      hipsY += (-0.14 - hipsY) * w;
+      // LOOM: standing tall, arms raised up over you, forearms hanging, head cocked flat sideways
+      if (loom > 0.001) {
+        const m = loom;
+        mixR(b.head, 'z', 1.35, m); mixR(b.head, 'x', 0.25, m); mixR(b.neck2, 'z', 0.35, m);
+        mixR(b.spine, 'x', 0.12, m); mixR(b.chest, 'x', 0.1, m);
+        for (const [n, side] of [['R', 1], ['L', -1]]) {
+          mixR(b['arm' + n], 'z', side * 2.35, m); mixR(b['arm' + n], 'x', -0.55, m);
+          mixR(b['fore' + n], 'x', -1.2, m); mixR(b['fore' + n], 'z', side * 0.3, m);
+          mixR(b['fing' + n], 'z', -side * 0.7, m); mixR(b['tip' + n], 'z', -side * 1.1, m);
+          mixR(b['thigh' + n], 'x', 0, m); mixR(b['shin' + n], 'x', 0, m);
+        }
+        hipsY *= 1 - m;
+      }
+    }
+    b.hips.position.y += hipsY;
+    if (shake > 0) {
+      const j = () => (rng() * 2 - 1) * shake;
+      b.head.rotation.x += j() * 0.35; b.head.rotation.y += j() * 0.6; b.head.rotation.z += j() * 0.8;
+      b.neck2.rotation.z += j() * 0.3; b.chest.rotation.y = j() * 0.15;
+      for (const n of ['R', 'L']) { b['fing' + n].rotation.z += j() * 0.6; b['tip' + n].rotation.z += j() * 0.9; b['fore' + n].rotation.y = j() * 0.4; }
+    } else b.chest.rotation.y = 0;
+
     if (watchTarget) {
       if (watchTarget.isObject3D) watchTarget.getWorldPosition(tmpV); else tmpV.copy(watchTarget);
       root.updateMatrixWorld(true);
@@ -373,6 +469,16 @@ export function createCreature1(opts = {}) {
     roar() { this.scream(); },
     get isScreaming() { return screamT >= 0; },
     setStopMotion(fps) { smFps = fps; },
+    /** Ground speed in m/s (negative = running backwards). Slow: a limping lurch; fast: on all fours. */
+    setGait(speed) { gaitSpeed = speed; },
+    /** 0..1: the jumpscare pose (arms flung wide, chin up). */
+    setLunge(v) { lunge = v; },
+    /** 0..1: violent shaking of the head and fingers. */
+    setShake(v) { shake = v; },
+    /** 0..1 (on top of the lunge): standing tall with its arms raised over you. */
+    setLoom(v) { loom = v; },
+    /** Called with 0 (walking) .. 1 (running on all fours) every time a foot or hand lands. */
+    set onStep(fn) { onStep = fn; },
     setOutline() {}, // kept for compatibility
     bones: boneObjs,
     mesh: body,
