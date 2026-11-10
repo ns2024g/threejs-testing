@@ -42,8 +42,14 @@ const ROOM_ID = 'forest';                 // ends up in the same world
 
 // ---------- Renderer, scene, camera ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
+// Low, VHS-like resolution: the game is drawn about VHS_LINES pixels tall and stretched
+// smoothly to fill the screen, which gives it a soft, slightly squished tape look.
+const VHS_LINES = 480;
+function applyResolution() {
+  renderer.setPixelRatio(Math.min(1, VHS_LINES / window.innerHeight));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+applyResolution();
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -189,7 +195,7 @@ addEventListener('mousemove', (e) => {
 addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  applyResolution();
 });
 
 // Darkens the screen edges while running
